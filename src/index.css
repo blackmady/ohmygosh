@@ -24,6 +24,31 @@ html {
   background: rgba(148, 163, 184, 0.4);
 }
 
+/* Fused Live Syntax-Highlighted Code Editor */
+.fused-code-editor-textarea {
+  color: transparent !important;
+  -webkit-text-fill-color: transparent !important;
+  caret-color: #38bdf8 !important; /* Bright Electric Cyan Caret */
+  background: transparent !important;
+  font-variant-ligatures: none !important;
+}
+
+.fused-code-editor-textarea::selection {
+  background-color: rgba(56, 189, 248, 0.35) !important;
+  color: transparent !important;
+  -webkit-text-fill-color: transparent !important;
+}
+
+.fused-code-editor-textarea::-moz-selection {
+  background-color: rgba(56, 189, 248, 0.35) !important;
+  color: transparent !important;
+}
+
+.fused-code-editor-textarea::placeholder {
+  color: #737373 !important;
+  -webkit-text-fill-color: #737373 !important;
+}
+
 /* Markdown Universal Typography & Element Styling */
 .markdown-rendered-content {
   line-height: 1.75;

@@ -3,12 +3,14 @@ import {
   Share2,
   Upload,
   FolderUp,
-  FileCode,
   Download,
-  Plus,
   HelpCircle,
   Globe,
   ChevronDown,
+  Database,
+  Cloud,
+  CheckCircle2,
+  Loader2,
 } from 'lucide-react';
 import { ViewMode } from '../types';
 
@@ -18,12 +20,16 @@ interface NavbarProps {
   onOpenShareModal: () => void;
   onOpenVsCodeModal: () => void;
   onOpenDeployGuide: () => void;
+  onOpenDatabaseModal: () => void;
   onSelectSamplePreset: (presetId: string) => void;
   onTriggerFileUpload: () => void;
   onTriggerFolderUpload: () => void;
   onNewEmptySnippet: () => void;
   onExportZip: () => void;
   fileCount: number;
+  isSavingToCloud?: boolean;
+  cacheStatusText?: string;
+  onQuickCloudSave?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -32,18 +38,22 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenShareModal,
   onOpenVsCodeModal,
   onOpenDeployGuide,
+  onOpenDatabaseModal,
   onSelectSamplePreset,
   onTriggerFileUpload,
   onTriggerFolderUpload,
   onNewEmptySnippet,
   onExportZip,
   fileCount,
+  isSavingToCloud = false,
+  cacheStatusText = '草稿已缓存',
+  onQuickCloudSave,
 }) => {
   const [showPresetsMenu, setShowPresetsMenu] = React.useState(false);
   const [showUploadMenu, setShowUploadMenu] = React.useState(false);
 
   return (
-    <header className="flex items-center justify-between gap-8 px-6 py-3.5 bg-neutral-900 border-b border-neutral-800 text-xs select-none relative z-30">
+    <header className="flex items-center justify-between gap-8 px-6 py-3 bg-neutral-900 border-b border-neutral-800 text-xs select-none relative z-30">
       {/* Zone 1: Single text element wordmark */}
       <div className="flex items-center gap-3 shrink-0">
         <a
@@ -58,9 +68,12 @@ export const Navbar: React.FC<NavbarProps> = ({
           <span className="w-2.5 h-2.5 rounded-full bg-orange-500 shadow-[0_0_8px_#f97316]"></span>
           <span>CloudPaste</span>
         </a>
-        <span className="text-[11px] text-neutral-500 font-mono hidden sm:inline">
-          Cloudflare Pages 实时代码与文件预览
-        </span>
+
+        {/* Local cache indicator */}
+        <div className="hidden sm:flex items-center gap-1.5 text-[11px] text-neutral-400 font-mono px-2 py-0.5 rounded bg-neutral-950 border border-neutral-800/80">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+          <span>{cacheStatusText}</span>
+        </div>
       </div>
 
       {/* Zone 2: 4-5 clean single-line text navigation links / actions */}
@@ -149,7 +162,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             }}
             className="flex items-center gap-1 hover:text-white transition-colors whitespace-nowrap shrink-0 py-1"
           >
-            <span>上传文件 / 文件夹</span>
+            <span>上传工程</span>
             <ChevronDown className="w-3 h-3 text-neutral-500" />
           </button>
 
@@ -182,13 +195,22 @@ export const Navbar: React.FC<NavbarProps> = ({
           )}
         </div>
 
+        {/* Cloudflare Database & Storage Management */}
+        <button
+          onClick={onOpenDatabaseModal}
+          className="hover:text-white transition-colors whitespace-nowrap shrink-0 flex items-center gap-1.5"
+        >
+          <Database className="w-3.5 h-3.5 text-orange-400" />
+          <span>Cloudflare 数据库</span>
+        </button>
+
         {/* Question: VS Code Comparison */}
         <button
           onClick={onOpenVsCodeModal}
           className="hover:text-orange-400 text-orange-300/90 transition-colors whitespace-nowrap shrink-0 flex items-center gap-1.5"
         >
           <HelpCircle className="w-3.5 h-3.5" />
-          <span>VS Code 插件对比分析</span>
+          <span>VS Code 对比</span>
         </button>
 
         {/* Cloudflare Pages Deployment Guide */}
@@ -197,7 +219,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           className="hover:text-white transition-colors whitespace-nowrap shrink-0 flex items-center gap-1.5"
         >
           <Globe className="w-3.5 h-3.5 text-neutral-400" />
-          <span>部署至 Cloudflare</span>
+          <span>GitHub 部署</span>
         </button>
       </nav>
 
@@ -239,6 +261,23 @@ export const Navbar: React.FC<NavbarProps> = ({
         >
           <Download className="w-4 h-4" />
         </button>
+
+        {/* Quick Cloud Save Button (Ctrl+S) */}
+        {onQuickCloudSave && (
+          <button
+            onClick={onQuickCloudSave}
+            disabled={isSavingToCloud}
+            title="保存至 Cloudflare 数据库与本地快照 (Ctrl+S)"
+            className="hidden md:flex items-center gap-1 px-3 py-1.5 bg-neutral-800 hover:bg-neutral-700 text-neutral-200 rounded-lg text-xs font-medium transition-colors border border-neutral-700"
+          >
+            {isSavingToCloud ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin text-orange-400" />
+            ) : (
+              <Cloud className="w-3.5 h-3.5 text-orange-400" />
+            )}
+            <span>{isSavingToCloud ? '存入云端...' : '存入数据库'}</span>
+          </button>
+        )}
 
         {/* Primary Action Button */}
         <button

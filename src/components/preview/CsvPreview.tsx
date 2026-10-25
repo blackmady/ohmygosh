@@ -1,22 +1,38 @@
 import React, { useState, useMemo } from 'react';
 import { FileItem } from '../../types';
 import Papa from 'papaparse';
-import { Search, ArrowUpDown, ArrowUp, ArrowDown, Download, FileSpreadsheet, FileCode } from 'lucide-react';
+import { Search, ArrowUpDown, ArrowUp, ArrowDown, Download, FileSpreadsheet, FileCode, Minimize2 } from 'lucide-react';
+import { useFloatingFullscreen } from '../../utils/useFloatingFullscreen';
 
 interface CsvPreviewProps {
   currentFile: FileItem;
+  isFullscreen?: boolean;
+  onExitFullscreen?: () => void;
 }
 
-export const CsvPreview: React.FC<CsvPreviewProps> = ({ currentFile }) => {
+export const CsvPreview: React.FC<CsvPreviewProps> = ({
+  currentFile,
+  isFullscreen = false,
+  onExitFullscreen = () => {},
+}) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortCol, setSortCol] = useState<number | null>(null);
   const [sortAsc, setSortAsc] = useState<boolean>(true);
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
+  const [pageSize, setPageSize] = useState(25);
   const [viewFormat, setViewFormat] = useState<'table' | 'raw'>('table');
 
+  const {
+    showFloatingBar,
+    showHint,
+    handleTopTriggerEnter,
+    handleTopTriggerLeave,
+    handleBarMouseEnter,
+    handleBarMouseLeave,
+  } = useFloatingFullscreen(isFullscreen, onExitFullscreen);
+
   // Parse CSV
-  const { headers, data, parseErrors } = useMemo(() => {
+  const { headers, data } = useMemo(() => {
     try {
       const parsed = Papa.parse(currentFile.content.trim(), {
         skipEmptyLines: true,
@@ -24,7 +40,7 @@ export const CsvPreview: React.FC<CsvPreviewProps> = ({ currentFile }) => {
 
       const rows = (parsed.data as string[][]) || [];
       if (rows.length === 0) {
-        return { headers: [], data: [], parseErrors: [] };
+        return { headers: [], data: [] };
       }
 
       const rawHeaders = rows[0] || [];
@@ -33,11 +49,10 @@ export const CsvPreview: React.FC<CsvPreviewProps> = ({ currentFile }) => {
       return {
         headers: rawHeaders,
         data: body,
-        parseErrors: parsed.errors,
       };
     } catch (err) {
       console.error('CSV parse error:', err);
-      return { headers: [], data: [], parseErrors: [String(err)] };
+      return { headers: [], data: [] };
     }
   }, [currentFile.content]);
 
@@ -45,7 +60,6 @@ export const CsvPreview: React.FC<CsvPreviewProps> = ({ currentFile }) => {
   const filteredRows = useMemo(() => {
     let result = [...data];
 
-    // Search filter
     if (searchTerm.trim()) {
       const query = searchTerm.toLowerCase();
       result = result.filter((row) =>
@@ -53,7 +67,6 @@ export const CsvPreview: React.FC<CsvPreviewProps> = ({ currentFile }) => {
       );
     }
 
-    // Sort
     if (sortCol !== null && sortCol < headers.length) {
       result.sort((a, b) => {
         const valA = a[sortCol] ?? '';
@@ -76,7 +89,6 @@ export const CsvPreview: React.FC<CsvPreviewProps> = ({ currentFile }) => {
     return result;
   }, [data, searchTerm, sortCol, sortAsc, headers.length]);
 
-  // Paginated slice
   const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize));
   const currentPage = Math.min(page, totalPages);
   const currentRows = useMemo(() => {
@@ -125,72 +137,125 @@ export const CsvPreview: React.FC<CsvPreviewProps> = ({ currentFile }) => {
     URL.revokeObjectURL(url);
   };
 
-  return (
-    <div className="flex flex-col h-full bg-neutral-950 text-neutral-200">
-      {/* CSV Toolbar */}
-      <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-1.5 bg-neutral-900 border-b border-neutral-800 text-xs">
-        <div className="flex items-center gap-2">
-          {/* View format tabs */}
-          <div className="flex items-center bg-neutral-800/80 rounded p-0.5">
-            <button
-              onClick={() => setViewFormat('table')}
-              className={`flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors ${
-                viewFormat === 'table' ? 'bg-neutral-700 text-white shadow-sm' : 'text-neutral-400 hover:text-white'
-              }`}
-            >
-              <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
-              <span>数据表格</span>
-            </button>
-            <button
-              onClick={() => setViewFormat('raw')}
-              className={`flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors ${
-                viewFormat === 'raw' ? 'bg-neutral-700 text-white shadow-sm' : 'text-neutral-400 hover:text-white'
-              }`}
-            >
-              <FileCode className="w-3.5 h-3.5" />
-              <span>纯文本</span>
-            </button>
+  const toolbarContent = (
+    <>
+      <div className="flex items-center gap-2">
+        <div className="flex items-center bg-neutral-800/80 rounded p-0.5 border border-neutral-700/60">
+          <button
+            onClick={() => setViewFormat('table')}
+            className={`flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors ${
+              viewFormat === 'table' ? 'bg-neutral-700 text-white shadow-sm' : 'text-neutral-400 hover:text-white'
+            }`}
+          >
+            <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
+            <span>数据表格</span>
+          </button>
+          <button
+            onClick={() => setViewFormat('raw')}
+            className={`flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors ${
+              viewFormat === 'raw' ? 'bg-neutral-700 text-white shadow-sm' : 'text-neutral-400 hover:text-white'
+            }`}
+          >
+            <FileCode className="w-3.5 h-3.5" />
+            <span>纯文本</span>
+          </button>
+        </div>
+
+        {viewFormat === 'table' && (
+          <div className="relative">
+            <Search className="w-3.5 h-3.5 text-neutral-500 absolute left-2 top-2" />
+            <input
+              type="text"
+              placeholder="搜索整表单元格..."
+              value={searchTerm}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                setPage(1);
+              }}
+              className="pl-7 pr-3 py-1 bg-neutral-950 border border-neutral-800 rounded text-xs text-neutral-200 placeholder-neutral-500 focus:outline-none focus:border-orange-500 w-44"
+            />
           </div>
-
-          {/* Search box */}
-          {viewFormat === 'table' && (
-            <div className="relative">
-              <Search className="w-3.5 h-3.5 text-neutral-500 absolute left-2 top-2" />
-              <input
-                type="text"
-                placeholder="搜索整表单元格..."
-                value={searchTerm}
-                onChange={(e) => {
-                  setSearchTerm(e.target.value);
-                  setPage(1);
-                }}
-                className="pl-7 pr-3 py-1 bg-neutral-950 border border-neutral-800 rounded text-xs text-neutral-200 placeholder-neutral-500 focus:outline-none focus:border-orange-500 w-44"
-              />
-            </div>
-          )}
-        </div>
-
-        {/* Action downloads */}
-        <div className="flex items-center gap-2">
-          <button
-            onClick={handleExportJson}
-            className="flex items-center gap-1 px-2.5 py-1 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white rounded text-xs transition-colors"
-          >
-            <Download className="w-3 h-3" />
-            <span>导出 JSON</span>
-          </button>
-          <button
-            onClick={handleExportCsv}
-            className="flex items-center gap-1 px-2.5 py-1 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white rounded text-xs transition-colors"
-          >
-            <Download className="w-3 h-3" />
-            <span>导出 CSV</span>
-          </button>
-        </div>
+        )}
       </div>
 
+      <div className="flex items-center gap-2">
+        <button
+          onClick={handleExportJson}
+          className="flex items-center gap-1 px-2.5 py-1 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white rounded text-xs transition-colors"
+        >
+          <Download className="w-3 h-3" />
+          <span>导出 JSON</span>
+        </button>
+        <button
+          onClick={handleExportCsv}
+          className="flex items-center gap-1 px-2.5 py-1 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white rounded text-xs transition-colors"
+        >
+          <Download className="w-3 h-3" />
+          <span>导出 CSV</span>
+        </button>
+
+        {isFullscreen && (
+          <button
+            onClick={onExitFullscreen}
+            className="flex items-center gap-1 px-3 py-1 bg-neutral-800 hover:bg-neutral-700 text-neutral-200 hover:text-white rounded text-xs font-medium transition-colors ml-2 border border-neutral-700"
+          >
+            <Minimize2 className="w-3.5 h-3.5" />
+            <span>退出全屏 (ESC)</span>
+          </button>
+        )}
+      </div>
+    </>
+  );
+
+  return (
+    <div className="flex flex-col h-full w-full bg-neutral-950 text-neutral-200 relative overflow-hidden">
+      {/* Fullscreen Floating Toolbar System */}
+      {isFullscreen ? (
+        <>
+          <div
+            onMouseEnter={handleTopTriggerEnter}
+            onMouseLeave={handleTopTriggerLeave}
+            className="fixed top-0 left-0 right-0 h-8 z-50 pointer-events-auto"
+          />
+
+          <div
+            className={`fixed top-4 left-1/2 -translate-x-1/2 z-50 px-3.5 py-1.5 bg-neutral-900/90 border border-neutral-700/80 rounded-full text-xs text-neutral-200 shadow-xl pointer-events-none transition-all duration-500 flex items-center gap-2 ${
+              showHint ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2'
+            }`}
+          >
+            <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
+            <span>已进入全屏 · 鼠标移至顶部显示工具栏 · 按 ESC 退出</span>
+          </div>
+
+          <div
+            onMouseEnter={handleBarMouseEnter}
+            onMouseLeave={handleBarMouseLeave}
+            className={`fixed top-0 left-0 right-0 z-50 px-4 py-2 bg-neutral-950/90 backdrop-blur-xl border-b border-neutral-800 shadow-2xl flex items-center justify-between text-xs transition-all duration-300 transform ${
+              showFloatingBar
+                ? 'translate-y-0 opacity-100 pointer-events-auto'
+                : '-translate-y-full opacity-0 pointer-events-none'
+            }`}
+          >
+            <div className="flex items-center gap-3">
+              <span className="font-semibold text-white truncate max-w-[160px]">
+                {currentFile.name}
+              </span>
+              <span className="text-[10px] text-neutral-400 bg-neutral-800 px-2 py-0.5 rounded font-mono">
+                CSV
+              </span>
+              <div className="h-4 w-px bg-neutral-800" />
+              {toolbarContent}
+            </div>
+          </div>
+        </>
+      ) : (
+        <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-1.5 bg-neutral-900 border-b border-neutral-800 text-xs">
+          {toolbarContent}
+        </div>
+      )}
+
       {/* Main Table Content */}
-      <div className="flex-1 overflow-auto bg-neutral-950">
+      <div className="flex-1 overflow-auto bg-neutral-950 w-full h-full">
         {viewFormat === 'raw' ? (
           <pre className="p-4 font-mono text-xs text-neutral-300 whitespace-pre overflow-auto">
             {currentFile.content}
@@ -289,8 +354,8 @@ export const CsvPreview: React.FC<CsvPreviewProps> = ({ currentFile }) => {
               }}
               className="bg-neutral-950 border border-neutral-800 text-neutral-300 rounded px-1.5 py-0.5 text-xs focus:outline-none"
             >
-              <option value={10}>10 行/页</option>
-              <option value={20}>20 行/页</option>
+              <option value={15}>15 行/页</option>
+              <option value={25}>25 行/页</option>
               <option value={50}>50 行/页</option>
               <option value={100}>100 行/页</option>
             </select>

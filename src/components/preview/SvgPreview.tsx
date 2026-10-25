@@ -1,16 +1,32 @@
 import React, { useState, useRef, useMemo } from 'react';
 import { FileItem } from '../../types';
-import { ZoomIn, ZoomOut, RotateCcw, Download, Image, Grid, Sun, Moon } from 'lucide-react';
+import { ZoomIn, ZoomOut, RotateCcw, Download, Image, Grid, Sun, Moon, Minimize2 } from 'lucide-react';
+import { useFloatingFullscreen } from '../../utils/useFloatingFullscreen';
 
 interface SvgPreviewProps {
   currentFile: FileItem;
+  isFullscreen?: boolean;
+  onExitFullscreen?: () => void;
 }
 
-export const SvgPreview: React.FC<SvgPreviewProps> = ({ currentFile }) => {
+export const SvgPreview: React.FC<SvgPreviewProps> = ({
+  currentFile,
+  isFullscreen = false,
+  onExitFullscreen = () => {},
+}) => {
   const [zoom, setZoom] = useState(1);
   const [bgMode, setBgMode] = useState<'checker' | 'dark' | 'light'>('checker');
   const [exporting, setExporting] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  const {
+    showFloatingBar,
+    showHint,
+    handleTopTriggerEnter,
+    handleTopTriggerLeave,
+    handleBarMouseEnter,
+    handleBarMouseLeave,
+  } = useFloatingFullscreen(isFullscreen, onExitFullscreen);
 
   // Parse SVG stats from content
   const svgMeta = useMemo(() => {
@@ -52,7 +68,7 @@ export const SvgPreview: React.FC<SvgPreviewProps> = ({ currentFile }) => {
 
       img.onload = () => {
         const canvas = document.createElement('canvas');
-        const scale = 2; // High-res 2x
+        const scale = 2;
         const width = img.width || 800;
         const height = img.height || 800;
         canvas.width = width * scale;
@@ -102,96 +118,152 @@ export const SvgPreview: React.FC<SvgPreviewProps> = ({ currentFile }) => {
       ? { backgroundColor: '#090d16' }
       : { backgroundColor: '#f8fafc' };
 
-  return (
-    <div className="flex flex-col h-full bg-neutral-950 text-neutral-200">
-      {/* Control bar */}
-      <div className="flex items-center justify-between px-3 py-1.5 bg-neutral-900 border-b border-neutral-800 text-xs">
-        <div className="flex items-center gap-2">
-          {/* Zoom controls */}
-          <div className="flex items-center bg-neutral-800/80 rounded p-0.5">
-            <button
-              onClick={() => setZoom((z) => Math.max(0.2, z - 0.2))}
-              title="缩小"
-              className="p-1 text-neutral-400 hover:text-white rounded"
-            >
-              <ZoomOut className="w-3.5 h-3.5" />
-            </button>
-            <span className="px-1.5 text-[11px] font-mono text-neutral-300 tabular-nums">
-              {Math.round(zoom * 100)}%
-            </span>
-            <button
-              onClick={() => setZoom((z) => Math.min(4, z + 0.2))}
-              title="放大"
-              className="p-1 text-neutral-400 hover:text-white rounded"
-            >
-              <ZoomIn className="w-3.5 h-3.5" />
-            </button>
-            <button
-              onClick={() => setZoom(1)}
-              title="重置缩放"
-              className="p-1 text-neutral-400 hover:text-white rounded ml-0.5 border-l border-neutral-700"
-            >
-              <RotateCcw className="w-3 h-3" />
-            </button>
-          </div>
-
-          {/* Background switcher */}
-          <div className="flex items-center bg-neutral-800/80 rounded p-0.5">
-            <button
-              onClick={() => setBgMode('checker')}
-              title="棋盘格背景（透明检测）"
-              className={`p-1 rounded ${
-                bgMode === 'checker' ? 'bg-neutral-700 text-white' : 'text-neutral-400 hover:text-white'
-              }`}
-            >
-              <Grid className="w-3.5 h-3.5" />
-            </button>
-            <button
-              onClick={() => setBgMode('dark')}
-              title="纯黑背景"
-              className={`p-1 rounded ${
-                bgMode === 'dark' ? 'bg-neutral-700 text-white' : 'text-neutral-400 hover:text-white'
-              }`}
-            >
-              <Moon className="w-3.5 h-3.5" />
-            </button>
-            <button
-              onClick={() => setBgMode('light')}
-              title="纯白背景"
-              className={`p-1 rounded ${
-                bgMode === 'light' ? 'bg-neutral-700 text-white' : 'text-neutral-400 hover:text-white'
-              }`}
-            >
-              <Sun className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        </div>
-
-        {/* Action downloads */}
-        <div className="flex items-center gap-1.5">
+  const controlsContent = (
+    <>
+      <div className="flex items-center gap-2">
+        {/* Zoom controls */}
+        <div className="flex items-center bg-neutral-800/80 rounded p-0.5 border border-neutral-700/60">
           <button
-            onClick={handleDownloadSvg}
-            className="flex items-center gap-1 px-2.5 py-1 bg-neutral-800 hover:bg-neutral-700 text-neutral-200 rounded text-xs transition-colors"
+            onClick={() => setZoom((z) => Math.max(0.2, z - 0.2))}
+            title="缩小"
+            className="p-1 text-neutral-400 hover:text-white rounded"
           >
-            <Download className="w-3.5 h-3.5" />
-            <span>导出 SVG</span>
+            <ZoomOut className="w-3.5 h-3.5" />
+          </button>
+          <span className="px-1.5 text-[11px] font-mono text-neutral-300 tabular-nums">
+            {Math.round(zoom * 100)}%
+          </span>
+          <button
+            onClick={() => setZoom((z) => Math.min(4, z + 0.2))}
+            title="放大"
+            className="p-1 text-neutral-400 hover:text-white rounded"
+          >
+            <ZoomIn className="w-3.5 h-3.5" />
           </button>
           <button
-            onClick={handleDownloadPng}
-            disabled={exporting}
-            className="flex items-center gap-1 px-2.5 py-1 bg-neutral-800 hover:bg-neutral-700 text-neutral-200 rounded text-xs transition-colors"
+            onClick={() => setZoom(1)}
+            title="重置缩放"
+            className="p-1 text-neutral-400 hover:text-white rounded ml-0.5 border-l border-neutral-700"
           >
-            <Image className="w-3.5 h-3.5" />
-            <span>{exporting ? '转换中...' : '导出 PNG'}</span>
+            <RotateCcw className="w-3 h-3" />
+          </button>
+        </div>
+
+        {/* Background switcher */}
+        <div className="flex items-center bg-neutral-800/80 rounded p-0.5 border border-neutral-700/60">
+          <button
+            onClick={() => setBgMode('checker')}
+            title="棋盘格背景（透明检测）"
+            className={`p-1 rounded ${
+              bgMode === 'checker' ? 'bg-neutral-700 text-white' : 'text-neutral-400 hover:text-white'
+            }`}
+          >
+            <Grid className="w-3.5 h-3.5" />
+          </button>
+          <button
+            onClick={() => setBgMode('dark')}
+            title="纯黑背景"
+            className={`p-1 rounded ${
+              bgMode === 'dark' ? 'bg-neutral-700 text-white' : 'text-neutral-400 hover:text-white'
+            }`}
+          >
+            <Moon className="w-3.5 h-3.5" />
+          </button>
+          <button
+            onClick={() => setBgMode('light')}
+            title="纯白背景"
+            className={`p-1 rounded ${
+              bgMode === 'light' ? 'bg-neutral-700 text-white' : 'text-neutral-400 hover:text-white'
+            }`}
+          >
+            <Sun className="w-3.5 h-3.5" />
           </button>
         </div>
       </div>
 
-      {/* SVG Canvas Area */}
+      {/* Action downloads */}
+      <div className="flex items-center gap-1.5">
+        <button
+          onClick={handleDownloadSvg}
+          className="flex items-center gap-1 px-2.5 py-1 bg-neutral-800 hover:bg-neutral-700 text-neutral-200 rounded text-xs transition-colors"
+        >
+          <Download className="w-3.5 h-3.5" />
+          <span>导出 SVG</span>
+        </button>
+        <button
+          onClick={handleDownloadPng}
+          disabled={exporting}
+          className="flex items-center gap-1 px-2.5 py-1 bg-neutral-800 hover:bg-neutral-700 text-neutral-200 rounded text-xs transition-colors"
+        >
+          <Image className="w-3.5 h-3.5" />
+          <span>{exporting ? '转换中...' : '导出 PNG'}</span>
+        </button>
+
+        {isFullscreen && (
+          <button
+            onClick={onExitFullscreen}
+            className="flex items-center gap-1 px-3 py-1 bg-neutral-800 hover:bg-neutral-700 text-neutral-200 hover:text-white rounded text-xs font-medium transition-colors ml-2 border border-neutral-700"
+          >
+            <Minimize2 className="w-3.5 h-3.5" />
+            <span>退出全屏 (ESC)</span>
+          </button>
+        )}
+      </div>
+    </>
+  );
+
+  return (
+    <div className="flex flex-col h-full w-full bg-neutral-950 text-neutral-200 relative overflow-hidden">
+      {/* Fullscreen Floating Toolbar System */}
+      {isFullscreen ? (
+        <>
+          <div
+            onMouseEnter={handleTopTriggerEnter}
+            onMouseLeave={handleTopTriggerLeave}
+            className="fixed top-0 left-0 right-0 h-8 z-50 pointer-events-auto"
+          />
+
+          <div
+            className={`fixed top-4 left-1/2 -translate-x-1/2 z-50 px-3.5 py-1.5 bg-neutral-900/90 border border-neutral-700/80 rounded-full text-xs text-neutral-200 shadow-xl pointer-events-none transition-all duration-500 flex items-center gap-2 ${
+              showHint ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2'
+            }`}
+          >
+            <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
+            <span>已进入全屏 · 鼠标移至顶部显示工具栏 · 按 ESC 退出</span>
+          </div>
+
+          <div
+            onMouseEnter={handleBarMouseEnter}
+            onMouseLeave={handleBarMouseLeave}
+            className={`fixed top-0 left-0 right-0 z-50 px-4 py-2 bg-neutral-950/90 backdrop-blur-xl border-b border-neutral-800 shadow-2xl flex items-center justify-between text-xs transition-all duration-300 transform ${
+              showFloatingBar
+                ? 'translate-y-0 opacity-100 pointer-events-auto'
+                : '-translate-y-full opacity-0 pointer-events-none'
+            }`}
+          >
+            <div className="flex items-center gap-3">
+              <span className="font-semibold text-white truncate max-w-[160px]">
+                {currentFile.name}
+              </span>
+              <span className="text-[10px] text-neutral-400 bg-neutral-800 px-2 py-0.5 rounded font-mono">
+                SVG
+              </span>
+              <div className="h-4 w-px bg-neutral-800" />
+              {controlsContent}
+            </div>
+          </div>
+        </>
+      ) : (
+        <div className="flex items-center justify-between px-3 py-1.5 bg-neutral-900 border-b border-neutral-800 text-xs">
+          {controlsContent}
+        </div>
+      )}
+
+      {/* SVG Canvas Area (takes full height in fullscreen) */}
       <div
         ref={containerRef}
         style={bgStyle}
-        className="flex-1 overflow-auto flex items-center justify-center p-8 transition-colors select-none"
+        className="flex-1 overflow-auto flex items-center justify-center p-8 transition-colors select-none w-full h-full"
       >
         <div
           style={{ transform: `scale(${zoom})`, transformOrigin: 'center center', transition: 'transform 0.15s ease-out' }}

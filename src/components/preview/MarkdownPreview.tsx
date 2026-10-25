@@ -12,18 +12,35 @@ import {
   FileText,
   Sun,
   Moon,
+  Minimize2,
 } from 'lucide-react';
+import { useFloatingFullscreen } from '../../utils/useFloatingFullscreen';
 
 interface MarkdownPreviewProps {
   currentFile: FileItem;
+  isFullscreen?: boolean;
+  onExitFullscreen?: () => void;
 }
 
-export const MarkdownPreview: React.FC<MarkdownPreviewProps> = ({ currentFile }) => {
+export const MarkdownPreview: React.FC<MarkdownPreviewProps> = ({
+  currentFile,
+  isFullscreen = false,
+  onExitFullscreen = () => {},
+}) => {
   const [copiedRaw, setCopiedRaw] = useState(false);
   const [showToc, setShowToc] = useState(true);
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const [activeHeadingId, setActiveHeadingId] = useState<string>('');
   const contentContainerRef = useRef<HTMLDivElement>(null);
+
+  const {
+    showFloatingBar,
+    showHint,
+    handleTopTriggerEnter,
+    handleTopTriggerLeave,
+    handleBarMouseEnter,
+    handleBarMouseLeave,
+  } = useFloatingFullscreen(isFullscreen, onExitFullscreen);
 
   // Compute stats
   const stats = useMemo(() => {
@@ -40,7 +57,6 @@ export const MarkdownPreview: React.FC<MarkdownPreviewProps> = ({ currentFile })
       const extractedToc: Array<{ level: number; text: string; id: string }> = [];
       const renderer = new Renderer();
 
-      // Heading custom renderer with slug IDs and anchor links
       renderer.heading = ({ text, depth }) => {
         const plainText = text.replace(/<[^>]+>/g, '').trim();
         const id =
@@ -74,7 +90,6 @@ export const MarkdownPreview: React.FC<MarkdownPreviewProps> = ({ currentFile })
         `;
       };
 
-      // Code block renderer with syntax highlighting & header bar
       renderer.code = ({ text, lang }) => {
         const cleanLang = (lang || '').trim().toLowerCase();
         let highlighted = '';
@@ -115,19 +130,16 @@ export const MarkdownPreview: React.FC<MarkdownPreviewProps> = ({ currentFile })
         `;
       };
 
-      // Inline code
       renderer.codespan = ({ text }) => {
         return `<code class="px-1.5 py-0.5 rounded-md bg-neutral-800/90 text-orange-300 font-mono text-xs border border-neutral-700/60 mx-0.5">${text}</code>`;
       };
 
-      // Links with external security
       renderer.link = ({ href, text, title }) => {
         const isExternal = href.startsWith('http');
         const target = isExternal ? 'target="_blank" rel="noopener noreferrer"' : '';
         return `<a href="${href}" ${target} title="${title || ''}" class="text-orange-400 hover:text-orange-300 underline underline-offset-2 transition-colors font-medium">${text}</a>`;
       };
 
-      // Checkbox list
       renderer.checkbox = ({ checked }) => {
         return checked
           ? `<span class="inline-flex items-center justify-center w-4 h-4 rounded bg-orange-600 text-white mr-2 align-middle text-[10px] select-none font-bold">✓</span>`
@@ -137,7 +149,6 @@ export const MarkdownPreview: React.FC<MarkdownPreviewProps> = ({ currentFile })
       marked.use({ renderer });
       let parsed = marked.parse(currentFile.content, { gfm: true, breaks: true }) as string;
 
-      // Transform GitHub style Callouts [!NOTE], [!TIP], [!WARNING] in blockquotes
       parsed = parsed.replace(
         /<blockquote>\s*<p>\s*\[!(NOTE|INFO)\]\s*(?:<br\s*\/?>)?([\s\S]*?)<\/p>\s*<\/blockquote>/gi,
         (_, __, body) => `
@@ -184,7 +195,6 @@ export const MarkdownPreview: React.FC<MarkdownPreviewProps> = ({ currentFile })
     }
   }, [currentFile.content]);
 
-  // Global helper for code block copy
   useEffect(() => {
     (window as any).__cloudPasteCopyCode = (btnEl: HTMLElement, encoded: string) => {
       try {
@@ -220,99 +230,152 @@ export const MarkdownPreview: React.FC<MarkdownPreviewProps> = ({ currentFile })
 
   const isLight = theme === 'light';
 
+  const toolbarControls = (
+    <div className="flex items-center gap-2">
+      {/* TOC Toggle button */}
+      {toc.length > 0 && (
+        <button
+          onClick={() => setShowToc(!showToc)}
+          title="切换目录大纲"
+          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
+            showToc
+              ? isLight
+                ? 'bg-neutral-200 text-neutral-900'
+                : 'bg-neutral-800 text-white'
+              : isLight
+              ? 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100'
+              : 'text-neutral-400 hover:text-white hover:bg-neutral-800'
+          }`}
+        >
+          <List className="w-3.5 h-3.5 text-orange-400" />
+          <span>目录大纲 ({toc.length})</span>
+        </button>
+      )}
+
+      {/* Theme switcher */}
+      <button
+        onClick={() => setTheme(isLight ? 'dark' : 'light')}
+        title={isLight ? '切换为深色模式' : '切换为浅色阅读模式'}
+        className={`p-1.5 rounded-md transition-colors ${
+          isLight
+            ? 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100'
+            : 'text-neutral-400 hover:text-white hover:bg-neutral-800'
+        }`}
+      >
+        {isLight ? <Moon className="w-3.5 h-3.5" /> : <Sun className="w-3.5 h-3.5" />}
+      </button>
+
+      {/* Copy raw */}
+      <button
+        onClick={handleCopyRaw}
+        className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
+          isLight
+            ? 'bg-neutral-200 hover:bg-neutral-300 text-neutral-800'
+            : 'bg-neutral-800 hover:bg-neutral-700 text-neutral-200'
+        }`}
+      >
+        {copiedRaw ? (
+          <Check className="w-3.5 h-3.5 text-emerald-500" />
+        ) : (
+          <Copy className="w-3.5 h-3.5" />
+        )}
+        <span>{copiedRaw ? '已复制' : '复制原文'}</span>
+      </button>
+
+      {isFullscreen && (
+        <button
+          onClick={onExitFullscreen}
+          className="flex items-center gap-1 px-3 py-1 bg-neutral-800 hover:bg-neutral-700 text-neutral-200 hover:text-white rounded-md text-xs font-medium transition-colors ml-2 border border-neutral-700"
+        >
+          <Minimize2 className="w-3.5 h-3.5" />
+          <span>退出全屏 (ESC)</span>
+        </button>
+      )}
+    </div>
+  );
+
   return (
     <div
-      className={`flex flex-col h-full transition-colors duration-200 ${
+      className={`flex flex-col h-full w-full transition-colors duration-200 relative overflow-hidden ${
         isLight ? 'bg-neutral-50 text-neutral-900' : 'bg-neutral-950 text-neutral-200'
       }`}
     >
-      {/* Markdown Topbar */}
-      <div
-        className={`flex items-center justify-between px-4 py-2 border-b text-xs select-none ${
-          isLight ? 'bg-white border-neutral-200' : 'bg-neutral-900 border-neutral-800'
-        }`}
-      >
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1.5 font-semibold">
-            <BookOpen className="w-4 h-4 text-orange-500" />
-            <span className={isLight ? 'text-neutral-800' : 'text-neutral-200'}>
-              {currentFile.name}
-            </span>
+      {/* Fullscreen Floating Toolbar System */}
+      {isFullscreen ? (
+        <>
+          <div
+            onMouseEnter={handleTopTriggerEnter}
+            onMouseLeave={handleTopTriggerLeave}
+            className="fixed top-0 left-0 right-0 h-8 z-50 pointer-events-auto"
+          />
+
+          <div
+            className={`fixed top-4 left-1/2 -translate-x-1/2 z-50 px-3.5 py-1.5 bg-neutral-900/90 border border-neutral-700/80 rounded-full text-xs text-neutral-200 shadow-xl pointer-events-none transition-all duration-500 flex items-center gap-2 ${
+              showHint ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2'
+            }`}
+          >
+            <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
+            <span>已进入全屏 · 鼠标移至顶部显示工具栏 · 按 ESC 退出</span>
           </div>
 
           <div
-            className={`hidden sm:flex items-center gap-2.5 text-[11px] ${
-              isLight ? 'text-neutral-500' : 'text-neutral-400'
+            onMouseEnter={handleBarMouseEnter}
+            onMouseLeave={handleBarMouseLeave}
+            className={`fixed top-0 left-0 right-0 z-50 px-4 py-2 bg-neutral-950/90 backdrop-blur-xl border-b border-neutral-800 shadow-2xl flex items-center justify-between text-xs transition-all duration-300 transform ${
+              showFloatingBar
+                ? 'translate-y-0 opacity-100 pointer-events-auto'
+                : '-translate-y-full opacity-0 pointer-events-none'
             }`}
           >
-            <span className="flex items-center gap-1">
-              <FileText className="w-3.5 h-3.5 opacity-60" />
-              <span>{stats.words.toLocaleString()} 词</span>
-            </span>
-            <span aria-hidden="true" className="opacity-40">·</span>
-            <span className="flex items-center gap-1">
-              <Clock className="w-3.5 h-3.5 opacity-60" />
-              <span>约 {stats.minutes} 分钟阅读</span>
-            </span>
-          </div>
-        </div>
+            <div className="flex items-center gap-3">
+              <span className="font-semibold text-white truncate max-w-[160px]">
+                {currentFile.name}
+              </span>
+              <span className="text-[10px] text-neutral-400 bg-neutral-800 px-2 py-0.5 rounded font-mono">
+                MARKDOWN
+              </span>
+              <div className="h-4 w-px bg-neutral-800" />
+              <div className="flex items-center gap-2.5 text-[11px] text-neutral-400">
+                <span>{stats.words.toLocaleString()} 词</span>
+                <span>·</span>
+                <span>约 {stats.minutes} 分钟阅读</span>
+              </div>
+            </div>
 
-        <div className="flex items-center gap-2">
-          {/* TOC Toggle button */}
-          {toc.length > 0 && (
-            <button
-              onClick={() => setShowToc(!showToc)}
-              title="切换目录大纲"
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
-                showToc
-                  ? isLight
-                    ? 'bg-neutral-200 text-neutral-900'
-                    : 'bg-neutral-800 text-white'
-                  : isLight
-                  ? 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100'
-                  : 'text-neutral-400 hover:text-white hover:bg-neutral-800'
+            {toolbarControls}
+          </div>
+        </>
+      ) : (
+        <div
+          className={`flex items-center justify-between px-4 py-2 border-b text-xs select-none ${
+            isLight ? 'bg-white border-neutral-200' : 'bg-neutral-900 border-neutral-800'
+          }`}
+        >
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1.5 font-semibold">
+              <BookOpen className="w-4 h-4 text-orange-500" />
+              <span className={isLight ? 'text-neutral-800' : 'text-neutral-200'}>
+                {currentFile.name}
+              </span>
+            </div>
+
+            <div
+              className={`hidden sm:flex items-center gap-2.5 text-[11px] ${
+                isLight ? 'text-neutral-500' : 'text-neutral-400'
               }`}
             >
-              <List className="w-3.5 h-3.5 text-orange-400" />
-              <span>目录大纲 ({toc.length})</span>
-            </button>
-          )}
+              <span>{stats.words.toLocaleString()} 词</span>
+              <span aria-hidden="true" className="opacity-40">·</span>
+              <span>约 {stats.minutes} 分钟阅读</span>
+            </div>
+          </div>
 
-          {/* Theme switcher */}
-          <button
-            onClick={() => setTheme(isLight ? 'dark' : 'light')}
-            title={isLight ? '切换为深色模式' : '切换为浅色阅读模式'}
-            className={`p-1.5 rounded-md transition-colors ${
-              isLight
-                ? 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100'
-                : 'text-neutral-400 hover:text-white hover:bg-neutral-800'
-            }`}
-          >
-            {isLight ? <Moon className="w-3.5 h-3.5" /> : <Sun className="w-3.5 h-3.5" />}
-          </button>
-
-          {/* Copy raw */}
-          <button
-            onClick={handleCopyRaw}
-            className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
-              isLight
-                ? 'bg-neutral-200 hover:bg-neutral-300 text-neutral-800'
-                : 'bg-neutral-800 hover:bg-neutral-700 text-neutral-200'
-            }`}
-          >
-            {copiedRaw ? (
-              <Check className="w-3.5 h-3.5 text-emerald-500" />
-            ) : (
-              <Copy className="w-3.5 h-3.5" />
-            )}
-            <span>{copiedRaw ? '已复制' : '复制原文'}</span>
-          </button>
+          {toolbarControls}
         </div>
-      </div>
+      )}
 
       {/* Main Content Layout with optional TOC sidebar */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* Left Table of Contents Drawer */}
+      <div className="flex-1 flex overflow-hidden w-full h-full">
         {showToc && toc.length > 0 && (
           <aside
             className={`w-64 shrink-0 border-r overflow-y-auto p-4 text-xs transition-colors select-none ${
@@ -355,7 +418,7 @@ export const MarkdownPreview: React.FC<MarkdownPreviewProps> = ({ currentFile })
         {/* Beautiful Markdown Body Container */}
         <div
           ref={contentContainerRef}
-          className="flex-1 overflow-y-auto px-6 py-8 md:px-12 md:py-10"
+          className="flex-1 overflow-y-auto px-6 py-8 md:px-12 md:py-10 w-full h-full"
         >
           <div
             className={`max-w-3xl mx-auto markdown-rendered-content ${

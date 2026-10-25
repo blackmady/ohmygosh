@@ -9,6 +9,16 @@ import { SAMPLE_PRESETS } from './utils/samples';
 import { detectLanguage } from './utils/language';
 import { decodeSharePayload } from './utils/compression';
 import { exportFilesAsZip, extractZipToFiles } from './utils/zip';
+import {
+  saveWorkspaceToLocal,
+  loadWorkspaceFromLocal,
+  clearLocalWorkspaceCache,
+} from './utils/storage';
+import {
+  saveSnippetToCloud,
+  loadSnippetFromCloud,
+  getUrlSnippetId,
+} from './utils/cloudApi';
 import { Navbar } from './components/Navbar';
 import { FileTree } from './components/FileTree';
 import { CodeEditor } from './components/CodeEditor';
@@ -16,21 +26,19 @@ import { PreviewPanel } from './components/PreviewPanel';
 import { ShareModal } from './components/ShareModal';
 import { VsCodeComparisonModal } from './components/VsCodeComparisonModal';
 import { CloudflareGuideModal } from './components/CloudflareGuideModal';
+import { CloudDatabaseModal } from './components/CloudDatabaseModal';
 import {
   UploadCloud,
-  FileCode,
-  FolderOpen,
-  Sparkles,
   Link as LinkIcon,
-  HelpCircle,
-  Eye,
-  Layers,
-  ArrowRight,
+  CheckCircle2,
+  Database,
+  Cloud,
 } from 'lucide-react';
 
 export default function App() {
-  // Initialize with decoded share link or default HTML preset
+  // Initialize with decoded share link, or local cached draft, or default preset
   const [files, setFiles] = useState<FileItem[]>(() => {
+    // 1. Try URL Hash #data=...
     const shared = decodeSharePayload();
     if (shared && shared.files.length > 0) {
       return shared.files.map((f, idx) => ({
@@ -43,29 +51,83 @@ export default function App() {
         lastModified: shared.createdAt,
       }));
     }
+
+    // 2. Try LocalStorage cached draft (Persistence)
+    const localCached = loadWorkspaceFromLocal();
+    if (localCached && localCached.files.length > 0) {
+      return localCached.files;
+    }
+
+    // 3. Fallback to default preset
     return SAMPLE_PRESETS[0].files;
   });
 
-  const [activeFileId, setActiveFileId] = useState<string>(() => files[0]?.id || '');
-  const [sharedInfo, setSharedInfo] = useState<{ title: string; createdAt: number } | null>(() => {
+  const [activeFileId, setActiveFileId] = useState<string>(() => {
+    const localCached = loadWorkspaceFromLocal();
+    if (localCached && localCached.activeFileId) {
+      return localCached.activeFileId;
+    }
+    return files[0]?.id || '';
+  });
+
+  const [sharedInfo, setSharedInfo] = useState<{ title: string; createdAt: number; source: 'cloud' | 'hash' } | null>(() => {
     const shared = decodeSharePayload();
     if (shared) {
-      return { title: shared.title, createdAt: shared.createdAt };
+      return { title: shared.title, createdAt: shared.createdAt, source: 'hash' };
     }
     return null;
   });
 
   const [viewMode, setViewMode] = useState<ViewMode>('split');
   const [isDragOver, setIsDragOver] = useState(false);
+  const [cacheStatusText, setCacheStatusText] = useState('本地已缓存');
+  const [isSavingToCloud, setIsSavingToCloud] = useState(false);
+  const [toastMsg, setToastMsg] = useState<string | null>(null);
 
   // Modals
   const [showShareModal, setShowShareModal] = useState(false);
   const [showVsCodeModal, setShowVsCodeModal] = useState(false);
   const [showDeployGuide, setShowDeployGuide] = useState(false);
+  const [showDatabaseModal, setShowDatabaseModal] = useState(false);
 
   // Input refs for file & folder uploads
   const fileInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
+  const autoSaveTimerRef = useRef<number | null>(null);
+
+  // Check URL for Cloudflare Database shortlink (#id=cp_xxx) on mount
+  useEffect(() => {
+    const snippetId = getUrlSnippetId();
+    if (snippetId) {
+      loadSnippetFromCloud(snippetId).then((data) => {
+        if (data && data.files.length > 0) {
+          setFiles(data.files);
+          const match = data.files.find((f) => f.path === data.activePath || f.name === data.activePath);
+          setActiveFileId(match ? match.id : data.files[0].id);
+          setSharedInfo({ title: data.title, createdAt: data.createdAt, source: 'cloud' });
+          showNotification(`已从 Cloudflare 数据库加载短链工程: ${data.title}`);
+        }
+      });
+    }
+  }, []);
+
+  // Debounced auto-save to localStorage on every change
+  useEffect(() => {
+    if (autoSaveTimerRef.current) {
+      window.clearTimeout(autoSaveTimerRef.current);
+    }
+
+    setCacheStatusText('正在缓存...');
+    autoSaveTimerRef.current = window.setTimeout(() => {
+      saveWorkspaceToLocal(files, activeFileId, true);
+      const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      setCacheStatusText(`已缓存 (${timeStr})`);
+    }, 600);
+
+    return () => {
+      if (autoSaveTimerRef.current) window.clearTimeout(autoSaveTimerRef.current);
+    };
+  }, [files, activeFileId]);
 
   // Sync active file if current file was deleted
   useEffect(() => {
@@ -74,8 +136,47 @@ export default function App() {
     }
   }, [files, activeFileId]);
 
-  // Current active file object
   const activeFile = files.find((f) => f.id === activeFileId) || files[0];
+
+  const showNotification = (msg: string) => {
+    setToastMsg(msg);
+    setTimeout(() => setToastMsg(null), 3000);
+  };
+
+  // Quick Cloud Save (Ctrl+S / Cmd+S or button click)
+  const handleQuickCloudSave = async () => {
+    if (!activeFile) return;
+    setIsSavingToCloud(true);
+    try {
+      const res = await saveSnippetToCloud(activeFile.name, files, activeFile);
+      if (res.success) {
+        showNotification(
+          res.storageType === 'cloudflare-d1'
+            ? '已保存至 Cloudflare D1 边缘数据库！'
+            : res.storageType === 'cloudflare-kv'
+            ? '已保存至 Cloudflare KV 数据库！'
+            : '已保存至本地快照与永久短链！'
+        );
+      }
+    } catch (err) {
+      console.error(err);
+      showNotification('已保存本地快照');
+    } finally {
+      setIsSavingToCloud(false);
+    }
+  };
+
+  // Global Ctrl+S keyboard shortcut
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        handleQuickCloudSave();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [files, activeFile]);
 
   // Update file content
   const handleContentChange = (newContent: string) => {
@@ -143,11 +244,21 @@ export default function App() {
     if (targetFile) {
       setActiveFileId(targetFile.id);
     }
+    showNotification(`已载入示例工程: ${preset.title}`);
+  };
+
+  // Restore snapshot from database modal
+  const handleRestoreSnapshot = (restoredFiles: FileItem[], activePath: string) => {
+    setFiles(restoredFiles);
+    const target = restoredFiles.find((f) => f.path === activePath || f.name === activePath);
+    setActiveFileId(target ? target.id : restoredFiles[0]?.id || '');
+    showNotification(`已恢复历史快照 (${restoredFiles.length} 个文件)`);
   };
 
   // New Empty Snippet
   const handleNewSnippet = () => {
     setSharedInfo(null);
+    clearLocalWorkspaceCache();
     const emptyFile: FileItem = {
       id: `file_${Date.now()}`,
       name: 'index.html',
@@ -184,7 +295,6 @@ export default function App() {
     for (let i = 0; i < fileList.length; i++) {
       const file = fileList[i];
 
-      // Handle .zip file unpack
       if (file.name.endsWith('.zip')) {
         try {
           const zipFiles = await extractZipToFiles(file);
@@ -195,7 +305,6 @@ export default function App() {
         }
       }
 
-      // Read text content
       try {
         const text = await file.text();
         const relPath = file.webkitRelativePath || file.name;
@@ -218,19 +327,17 @@ export default function App() {
 
     if (newItems.length > 0) {
       setFiles((prev) => {
-        // Find if user already had default initial sample, replace or append
         const filteredPrev = prev.filter((p) => !p.id.startsWith('sample_'));
         return [...filteredPrev, ...newItems];
       });
-      // Prefer activating index.html if present
       const indexFile = newItems.find(
         (f) => f.name.toLowerCase() === 'index.html' || f.name.toLowerCase().endsWith('.html')
       );
       setActiveFileId(indexFile ? indexFile.id : newItems[0].id);
+      showNotification(`成功导入 ${newItems.length} 个文件`);
     }
   };
 
-  // Drag and drop handlers
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -294,12 +401,16 @@ export default function App() {
         onOpenShareModal={() => setShowShareModal(true)}
         onOpenVsCodeModal={() => setShowVsCodeModal(true)}
         onOpenDeployGuide={() => setShowDeployGuide(true)}
+        onOpenDatabaseModal={() => setShowDatabaseModal(true)}
         onSelectSamplePreset={handleSelectPreset}
         onTriggerFileUpload={() => fileInputRef.current?.click()}
         onTriggerFolderUpload={() => folderInputRef.current?.click()}
         onNewEmptySnippet={handleNewSnippet}
         onExportZip={() => exportFilesAsZip(files)}
         fileCount={files.length}
+        isSavingToCloud={isSavingToCloud}
+        cacheStatusText={cacheStatusText}
+        onQuickCloudSave={handleQuickCloudSave}
       />
 
       {/* Shared Snippet Kicker Banner */}
@@ -308,10 +419,10 @@ export default function App() {
           <div className="flex items-center gap-2">
             <LinkIcon className="w-3.5 h-3.5 text-orange-400 shrink-0" />
             <span>
-              正在查看通过永久链接加载的代码工程: <strong>{sharedInfo.title}</strong>
+              正在查看通过{sharedInfo.source === 'cloud' ? 'Cloudflare 数据库' : '永久短链'}加载的代码工程: <strong>{sharedInfo.title}</strong>
             </span>
             <span aria-hidden="true" className="text-orange-400/60">·</span>
-            <span className="text-orange-300/80">纯前端解密渲染，未经过任何中心化服务器</span>
+            <span className="text-orange-300/80">代码已自动同步建立本地缓存</span>
           </div>
 
           <button
@@ -382,6 +493,14 @@ export default function App() {
             </p>
           </div>
         )}
+
+        {/* Notification Toast */}
+        {toastMsg && (
+          <div className="absolute bottom-6 right-6 z-50 px-4 py-2.5 bg-neutral-900/95 border border-neutral-700/80 rounded-xl shadow-2xl text-xs text-white flex items-center gap-2 animate-fade-in">
+            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+            <span>{toastMsg}</span>
+          </div>
+        )}
       </div>
 
       {/* Modals */}
@@ -399,6 +518,13 @@ export default function App() {
 
       {showDeployGuide && (
         <CloudflareGuideModal onClose={() => setShowDeployGuide(false)} />
+      )}
+
+      {showDatabaseModal && (
+        <CloudDatabaseModal
+          onClose={() => setShowDatabaseModal(false)}
+          onRestoreSnapshot={handleRestoreSnapshot}
+        />
       )}
     </div>
   );
