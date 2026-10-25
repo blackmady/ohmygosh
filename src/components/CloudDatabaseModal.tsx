@@ -9,6 +9,13 @@ import {
   VersionSnapshot,
 } from '../utils/storage';
 import {
+  checkCloudflareDatabaseStatus,
+  fetchCloudSnippetsList,
+  loadSnippetFromCloud,
+  CloudDatabaseStatus,
+  CloudSnippetListItem,
+} from '../utils/cloudApi';
+import {
   X,
   Database,
   History,
@@ -22,6 +29,10 @@ import {
   HardDrive,
   Cloud,
   Layers,
+  RefreshCw,
+  AlertTriangle,
+  CheckCircle2,
+  FolderOpen,
 } from 'lucide-react';
 
 interface CloudDatabaseModalProps {
@@ -37,10 +48,40 @@ export const CloudDatabaseModal: React.FC<CloudDatabaseModalProps> = ({
   const [cloudSnippets, setCloudSnippets] = useState<CloudSnippetMeta[]>([]);
   const [versionSnapshots, setVersionSnapshots] = useState<VersionSnapshot[]>([]);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [dbStatus, setDbStatus] = useState<CloudDatabaseStatus | null>(null);
+  const [isCheckingStatus, setIsCheckingStatus] = useState(false);
+  const [remoteSnippets, setRemoteSnippets] = useState<CloudSnippetListItem[]>([]);
+  const [isLoadingRemote, setIsLoadingRemote] = useState(false);
+
+  const checkStatus = async () => {
+    setIsCheckingStatus(true);
+    try {
+      const status = await checkCloudflareDatabaseStatus();
+      setDbStatus(status);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsCheckingStatus(false);
+    }
+  };
+
+  const loadRemoteSnippets = async () => {
+    setIsLoadingRemote(true);
+    try {
+      const list = await fetchCloudSnippetsList();
+      setRemoteSnippets(list);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsLoadingRemote(false);
+    }
+  };
 
   useEffect(() => {
     setCloudSnippets(loadCloudSnippets());
     setVersionSnapshots(loadVersionHistory());
+    checkStatus();
+    loadRemoteSnippets();
   }, []);
 
   const handleCopy = (text: string, id: string) => {
@@ -61,6 +102,17 @@ export const CloudDatabaseModal: React.FC<CloudDatabaseModalProps> = ({
     }
   };
 
+  const handleLoadRemoteSnippet = async (id: string) => {
+    const data = await loadSnippetFromCloud(id);
+    if (data && data.files.length > 0) {
+      onRestoreSnapshot(data.files, data.activePath);
+      window.location.hash = `#id=${id}`;
+      onClose();
+    } else {
+      alert(`无法载入项目 ${id}，可能尚未存入数据库`);
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-fade-in select-none">
       <div className="w-full max-w-2xl bg-neutral-900 border border-neutral-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col text-neutral-100 max-h-[90vh]">
@@ -72,10 +124,10 @@ export const CloudDatabaseModal: React.FC<CloudDatabaseModalProps> = ({
             </div>
             <div>
               <h2 className="text-base font-semibold text-white">
-                存储与 Cloudflare 数据库
+                Cloudflare D1 边缘数据库与版本存储
               </h2>
               <p className="text-xs text-neutral-400">
-                双轨持久化：本地实时热缓存 + Cloudflare D1 边缘数据库存储
+                实时状态检测 · 表结构自动就绪 · 专属 ID 持久化存储
               </p>
             </div>
           </div>
@@ -84,6 +136,36 @@ export const CloudDatabaseModal: React.FC<CloudDatabaseModalProps> = ({
             className="p-1.5 text-neutral-400 hover:text-white rounded-lg hover:bg-neutral-800 transition-colors"
           >
             <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Database Live Health Status Bar */}
+        <div className="px-6 py-2.5 bg-neutral-950 border-b border-neutral-800 flex items-center justify-between text-xs">
+          <div className="flex items-center gap-2">
+            <span className="text-neutral-400">D1 连接状态:</span>
+            {dbStatus?.d1Bound ? (
+              <span className="flex items-center gap-1 text-emerald-400 font-medium">
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                <span>已就绪 (DB 已绑定，表 snippets 共 {dbStatus.count ?? 0} 条记录)</span>
+              </span>
+            ) : (
+              <span className="flex items-center gap-1 text-amber-400 font-medium">
+                <AlertTriangle className="w-3.5 h-3.5" />
+                <span>未绑定 D1 数据库 (请在 Pages 设置中添加变量名 DB)</span>
+              </span>
+            )}
+          </div>
+
+          <button
+            onClick={() => {
+              checkStatus();
+              loadRemoteSnippets();
+            }}
+            disabled={isCheckingStatus}
+            className="text-neutral-400 hover:text-white flex items-center gap-1 text-[11px] transition-colors"
+          >
+            <RefreshCw className={`w-3 h-3 ${isCheckingStatus ? 'animate-spin text-orange-400' : ''}`} />
+            <span>重新检测</span>
           </button>
         </div>
 
@@ -98,7 +180,7 @@ export const CloudDatabaseModal: React.FC<CloudDatabaseModalProps> = ({
             }`}
           >
             <Cloud className="w-3.5 h-3.5" />
-            <span>云端已存记录 ({cloudSnippets.length})</span>
+            <span>云端数据库记录 ({remoteSnippets.length > 0 ? remoteSnippets.length : cloudSnippets.length})</span>
           </button>
 
           <button
@@ -110,7 +192,7 @@ export const CloudDatabaseModal: React.FC<CloudDatabaseModalProps> = ({
             }`}
           >
             <History className="w-3.5 h-3.5" />
-            <span>本地版本与草稿 ({versionSnapshots.length})</span>
+            <span>本地历史快照 ({versionSnapshots.length})</span>
           </button>
 
           <button
@@ -122,7 +204,7 @@ export const CloudDatabaseModal: React.FC<CloudDatabaseModalProps> = ({
             }`}
           >
             <Terminal className="w-3.5 h-3.5" />
-            <span>Cloudflare D1 架构与初始化</span>
+            <span>Cloudflare D1 绑定与初始化</span>
           </button>
         </div>
 
@@ -132,15 +214,61 @@ export const CloudDatabaseModal: React.FC<CloudDatabaseModalProps> = ({
           {activeTab === 'cloud' && (
             <div className="space-y-3">
               <div className="flex items-center justify-between text-neutral-400 text-xs">
-                <span>每次点击「保存到云端」生成的 Cloudflare 数据库与永久短链记录</span>
+                <span>通过 Cloudflare D1 数据库存储的项目，均生成基于专属短 ID 的永久链接</span>
               </div>
 
-              {cloudSnippets.length === 0 ? (
-                <div className="py-12 text-center text-neutral-500">
-                  <Cloud className="w-8 h-8 mx-auto mb-2 opacity-40 text-orange-400" />
-                  <p>暂无云端保存记录。点击主界面的「保存至云端 (Ctrl+S)」即可自动保存！</p>
+              {/* Show D1 bound records if available */}
+              {remoteSnippets.length > 0 ? (
+                <div className="space-y-2">
+                  {remoteSnippets.map((item) => {
+                    const shortUrl = `${window.location.origin}/#id=${item.id}`;
+                    return (
+                      <div
+                        key={item.id}
+                        className="p-3 bg-neutral-950 border border-neutral-800 rounded-xl flex items-center justify-between gap-3 hover:border-neutral-700 transition-colors"
+                      >
+                        <div className="truncate flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="font-semibold text-white truncate">{item.title}</span>
+                            <span className="px-1.5 py-0.2 bg-emerald-950/60 text-emerald-400 border border-emerald-800/60 rounded text-[10px] font-mono">
+                              {item.id}
+                            </span>
+                          </div>
+                          <div className="text-[11px] text-neutral-500 font-mono flex items-center gap-3">
+                            <span>{new Date(item.created_at).toLocaleString()}</span>
+                            <span>·</span>
+                            <span>{item.total_files} 个文件</span>
+                            <span>·</span>
+                            <span>{(item.size_bytes / 1024).toFixed(1)} KB</span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 shrink-0">
+                          <button
+                            onClick={() => handleLoadRemoteSnippet(item.id)}
+                            className="px-2.5 py-1 bg-orange-600/90 hover:bg-orange-500 text-white rounded text-xs flex items-center gap-1 font-medium transition-colors"
+                          >
+                            <FolderOpen className="w-3.5 h-3.5" />
+                            <span>载入</span>
+                          </button>
+
+                          <button
+                            onClick={() => handleCopy(shortUrl, item.id)}
+                            className="px-2.5 py-1 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white rounded text-xs flex items-center gap-1 transition-colors"
+                          >
+                            {copiedId === item.id ? (
+                              <Check className="w-3.5 h-3.5 text-emerald-400" />
+                            ) : (
+                              <Copy className="w-3.5 h-3.5" />
+                            )}
+                            <span>{copiedId === item.id ? '已复制' : '复制短链'}</span>
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
-              ) : (
+              ) : cloudSnippets.length > 0 ? (
                 <div className="space-y-2">
                   {cloudSnippets.map((item) => (
                     <div
@@ -163,7 +291,14 @@ export const CloudDatabaseModal: React.FC<CloudDatabaseModalProps> = ({
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-1.5 shrink-0">
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button
+                          onClick={() => handleLoadRemoteSnippet(item.id)}
+                          className="px-2.5 py-1 bg-orange-600/90 hover:bg-orange-500 text-white rounded text-xs flex items-center gap-1 font-medium transition-colors"
+                        >
+                          <FolderOpen className="w-3.5 h-3.5" />
+                          <span>载入</span>
+                        </button>
                         <button
                           onClick={() => handleCopy(item.shortUrl, item.id)}
                           className="px-2.5 py-1 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white rounded text-xs flex items-center gap-1 transition-colors"
@@ -178,6 +313,11 @@ export const CloudDatabaseModal: React.FC<CloudDatabaseModalProps> = ({
                       </div>
                     </div>
                   ))}
+                </div>
+              ) : (
+                <div className="py-12 text-center text-neutral-500">
+                  <Cloud className="w-8 h-8 mx-auto mb-2 opacity-40 text-orange-400" />
+                  <p>暂无云端保存记录。点击主界面的「存入数据库」或「生成永久链接」即可将项目入库并获得专属短链！</p>
                 </div>
               )}
             </div>
@@ -251,41 +391,42 @@ export const CloudDatabaseModal: React.FC<CloudDatabaseModalProps> = ({
             <div className="space-y-4 leading-relaxed text-neutral-300">
               <div className="p-3 bg-orange-950/20 border border-orange-800/40 rounded-xl">
                 <span className="font-semibold text-white block mb-1">
-                  Cloudflare D1 边缘关系型数据库 (Serverless SQLite)
+                  为什么之前点「存入数据库」后表还是空的？
                 </span>
-                <p className="text-neutral-400 text-xs">
-                  我们在项目根目录内置了 <code className="text-orange-300 bg-neutral-900 px-1 py-0.5 rounded">schema.sql</code> 和 <code className="text-orange-300 bg-neutral-900 px-1 py-0.5 rounded">/functions/api/snippets</code>，原生直连 Cloudflare D1 数据库。
+                <p className="text-neutral-400 text-xs leading-relaxed">
+                  Cloudflare Pages 在通过 GitHub 连接自动部署时，<strong>不会自动绑定</strong>你在 Cloudflare 创建的 D1 数据库。如果未在后台完成绑定，后端 Functions 就无法访问数据库实例。现在我们已加入<strong>自动建表机制</strong>与<strong>状态自检</strong>，您只需在 Cloudflare 后台完成一次绑定即可！
                 </p>
               </div>
 
               <div className="space-y-2">
-                <div className="font-semibold text-white">两步初始化 D1 数据库：</div>
-                <div className="relative">
-                  <pre className="p-3 bg-neutral-950 border border-neutral-800 rounded-lg font-mono text-[11px] text-orange-300 overflow-x-auto">
-{`# 1. 创建 D1 数据库实例
-npx wrangler d1 create ohmygosh-db
-
-# 2. 导入数据表结构 (执行根目录下的 schema.sql)
-npx wrangler d1 execute ohmygosh-db --file=./schema.sql`}
-                  </pre>
-                  <button
-                    onClick={() =>
-                      handleCopy(
-                        'npx wrangler d1 create ohmygosh-db\nnpx wrangler d1 execute ohmygosh-db --file=./schema.sql',
-                        'd1_cmd'
-                      )
-                    }
-                    className="absolute right-2 top-2 p-1.5 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 rounded"
-                  >
-                    {copiedId === 'd1_cmd' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                  </button>
+                <div className="font-semibold text-white">Cloudflare Pages 后台 1 分钟绑定教程：</div>
+                <div className="p-3 bg-neutral-950 border border-neutral-800 rounded-lg text-xs space-y-2 font-mono">
+                  <div className="text-neutral-300">
+                    1. 登录 Cloudflare Dashboard -&gt; <span className="text-orange-400">Workers 和 Pages</span> -&gt; 点击你的项目 <span className="text-orange-400">ohmygosh</span>
+                  </div>
+                  <div className="text-neutral-300">
+                    2. 点击顶部导航栏的 <span className="text-orange-400">设置 (Settings)</span> -&gt; 点击左侧 <span className="text-orange-400">Functions</span>
+                  </div>
+                  <div className="text-neutral-300">
+                    3. 滚动到 <span className="text-orange-400">D1 数据库绑定 (D1 database bindings)</span> 区域 -&gt; 点击 <span className="text-orange-400">添加绑定 (Add binding)</span>
+                  </div>
+                  <div className="text-neutral-300">
+                    4. 变量名称 (Variable name) 输入：<span className="text-emerald-400 font-bold bg-neutral-900 px-1.5 py-0.5 rounded">DB</span> (区分大小写，务必填 DB)
+                  </div>
+                  <div className="text-neutral-300">
+                    5. D1 数据库 (D1 database) 选择：你的数据库名称（如 <span className="text-orange-400">ohmygosh-db</span>）
+                  </div>
+                  <div className="text-neutral-300">
+                    6. 点击保存，完成！
+                  </div>
                 </div>
               </div>
 
-              <div className="space-y-1 text-xs text-neutral-400">
-                <div>
-                  <strong>双轨回退机制</strong>：在你的 Cloudflare 控制台完成 D1 绑定前，系统会自动使用 LZ-String 客户端压缩链接无缝保存，<strong>无需担心报错或数据丢失</strong>。
-                </div>
+              <div className="space-y-2">
+                <div className="font-semibold text-white">建表说明：</div>
+                <p className="text-xs text-neutral-400">
+                  我们在后端已内置了 <code className="text-orange-300 font-mono">CREATE TABLE IF NOT EXISTS snippets</code> 自动执行逻辑，因此在绑定好 <code className="text-orange-300 font-mono">DB</code> 后，<strong>首次存入时会自动建表并插入数据</strong>，不需要手动运行 SQL。
+                </p>
               </div>
             </div>
           )}
@@ -297,7 +438,7 @@ npx wrangler d1 execute ohmygosh-db --file=./schema.sql`}
             onClick={onClose}
             className="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 text-neutral-200 rounded-lg text-xs font-medium transition-colors"
           >
-            完成
+            关闭
           </button>
         </div>
       </div>

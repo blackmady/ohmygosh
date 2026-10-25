@@ -113,7 +113,25 @@ export default function App() {
 
   // Dedicated loader for URL share payloads and Cloudflare snippet IDs
   const loadFromUrl = useCallback(async () => {
-    // 1. Try URL share payload (#data=..., ?data=..., #d=...)
+    // 1. Try Cloudflare Database snippet (#id=cp_xxx, ?id=cp_xxx)
+    const snippetId = getUrlSnippetId();
+    if (snippetId) {
+      showNotification(`正在从 Cloudflare 数据库载入项目 (ID: ${snippetId})...`);
+      const data = await loadSnippetFromCloud(snippetId);
+      if (data && data.files.length > 0) {
+        setFiles(data.files);
+        const match = data.files.find((f) => f.path === data.activePath || f.name === data.activePath);
+        setActiveFileId(match ? match.id : data.files[0].id);
+        setSharedInfo({ title: data.title, createdAt: data.createdAt, source: 'cloud' });
+        showNotification(`已成功载入云端项目: ${data.title} (ID: ${snippetId})`);
+        return true;
+      } else {
+        showNotification(`提示：未在云端数据库检索到项目 ID: ${snippetId}（请确认已在 Cloudflare Pages 绑定 D1）`);
+        return false;
+      }
+    }
+
+    // 2. Backward compatibility for legacy URL payload (#data=..., ?data=..., #d=...)
     const shared = decodeSharePayload();
     if (shared && shared.files.length > 0) {
       const mappedFiles: FileItem[] = shared.files.map((f, idx) => ({
@@ -129,31 +147,15 @@ export default function App() {
       const match = mappedFiles.find((f) => f.path === shared.activePath || f.name === shared.activePath);
       setActiveFileId(match ? match.id : mappedFiles[0].id);
       setSharedInfo({ title: shared.title, createdAt: shared.createdAt, source: 'hash' });
-      showNotification(`已载入永久分享工程: ${shared.title}`);
+      showNotification(`已载入工程: ${shared.title}`);
       return true;
     }
 
-    // 2. Try Cloudflare Database snippet (#id=cp_xxx)
-    const snippetId = getUrlSnippetId();
-    if (snippetId) {
-      const data = await loadSnippetFromCloud(snippetId);
-      if (data && data.files.length > 0) {
-        setFiles(data.files);
-        const match = data.files.find((f) => f.path === data.activePath || f.name === data.activePath);
-        setActiveFileId(match ? match.id : data.files[0].id);
-        setSharedInfo({ title: data.title, createdAt: data.createdAt, source: 'cloud' });
-        showNotification(`已从 Cloudflare 数据库加载短链工程: ${data.title}`);
-        return true;
-      } else {
-        showNotification('提示：该短链未在云端检索到（可能尚未绑定 Cloudflare D1 数据库）');
-      }
-    }
     return false;
   }, [showNotification]);
 
   // Handle URL change dynamically without page reload
   useEffect(() => {
-    // If not already resolved by getInitialWorkspace, trigger loadFromUrl (e.g. for async Cloud snippet)
     const snippetId = getUrlSnippetId();
     if (snippetId) {
       loadFromUrl();
@@ -204,18 +206,16 @@ export default function App() {
     setIsSavingToCloud(true);
     try {
       const res = await saveSnippetToCloud(activeFile.name, files, activeFile);
-      if (res.success) {
-        showNotification(
-          res.storageType === 'cloudflare-d1'
-            ? '已保存至 Cloudflare D1 边缘数据库！'
-            : res.storageType === 'cloudflare-kv'
-            ? '已保存至 Cloudflare KV 数据库！'
-            : '已保存至本地快照与永久短链！'
-        );
+      if (res.success && res.id) {
+        window.location.hash = `#id=${res.id}`;
+        showNotification(`✓ 已成功存入 Cloudflare 数据库表 snippets (ID: ${res.id})`);
+      } else {
+        showNotification(`⚠️ 未能存入数据库: ${res.error || 'D1 数据库未绑定'}`);
+        setShowDatabaseModal(true);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      showNotification('已保存本地快照');
+      showNotification(`⚠️ 保存出错: ${err.message || err}`);
     } finally {
       setIsSavingToCloud(false);
     }
@@ -564,6 +564,7 @@ export default function App() {
           files={files}
           activeFile={activeFile}
           onClose={() => setShowShareModal(false)}
+          onOpenDeployGuide={() => setShowDeployGuide(true)}
         />
       )}
 
