@@ -305,18 +305,22 @@ export const SAMPLE_PRESETS: SamplePreset[] = [
 
 欢迎使用 **CloudPaste**！这是一个专为前端开发者、设计工程师和技术写作者打造的静态与边缘代码预览分享站。
 
+> [!NOTE]
 > **核心设计理念**：无需任何后端服务器或传统数据库，完全依靠浏览器端压缩算法与 Cloudflare 全球边缘分发网络，实现零运维、零成本的永久链接分享。
+
+> [!TIP]
+> **移动端友好**：点击右上角「生成永久链接」可自动生成高清晰度二维码，手机相机扫码即可在任何移动浏览器上秒开预览！
 
 ---
 
 ## 核心功能矩阵
 
-| 模块类别 | 支持格式 / 技术 | 预览能力 | 永久分享方式 |
+| 模块类别 | 支持格式 / 技术 | 视窗实时渲染能力 | 永久分享方式 |
 | :--- | :--- | :--- | :--- |
-| **前端交互** | HTML, CSS, JavaScript | 独立沙箱 iframe / 控制台捕获 | URL Hash 压缩（永久直达） |
-| **矢量图像** | SVG, XML | 动态矢量画板 / 缩放 / 导出 PNG | 嵌入式 base64 或静态 Zip |
-| **文档排版** | Markdown (GFM) | 标题大纲 / 任务列表 / 表格语法 | 纯前端即时渲染 |
-| **结构化数据** | CSV, TSV, JSON | 交互表格 / 列排序 / 树状折叠 | 过滤检索与导出 CSV |
+| **前端交互** | HTML, CSS, JavaScript | 独立沙箱 iframe / 控制台捕获 / 设备多端预览 | URL Hash 压缩（永久直达） |
+| **矢量图像** | SVG, XML | 动态矢量画板 / 缩放 / 导出 SVG 与 2x PNG | 嵌入式 base64 或静态 Zip |
+| **文档排版** | Markdown (GFM) | 标题锚点跳转 / 任务清单 / 语法高亮代码块 | 纯前端即时解析渲染 |
+| **结构化数据** | CSV, TSV, JSON | 交互表格 / 列排序 / 模糊搜索 / 树状折叠 | 过滤检索与一键导出 CSV / JSON |
 
 ---
 
@@ -326,6 +330,9 @@ export const SAMPLE_PRESETS: SamplePreset[] = [
 - [x] **跨平台无依赖**：无需配置 Node.js、扩展插件或本地工作区环境。
 - [x] **边缘永久托管**：一键部署到 Cloudflare Pages，享受全球 300+ 城市 Anycast CDN 加速。
 - [ ] *进阶插件联动*：后续可补充轻量 VS Code 右键菜单，一键把选区直接发送到本 Web 页面。
+
+> [!WARNING]
+> 若使用 VS Code 插件分享，接收者手机平板将完全无法打开，因此 Web 站是实现广泛分享的最优载体。
 
 ---
 
@@ -347,8 +354,8 @@ export function createPermanentUrl(snippetData) {
 只需一条终端命令即可部署你的专属实例：
 
 \`\`\`bash
-# 1. 安装 Wrangler CLI
-npm install -g wrangler
+# 1. 安装 Wrangler CLI 并本地打包
+npm run build
 
 # 2. 部署到 Cloudflare Pages
 npx wrangler pages deploy ./dist --project-name=cloudpaste

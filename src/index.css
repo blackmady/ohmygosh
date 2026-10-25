@@ -1,1 +1,192 @@
 @import "tailwindcss";
+
+/* Smooth scroll for anchors */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.2);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.4);
+}
+
+/* Markdown Universal Typography & Element Styling */
+.markdown-rendered-content {
+  line-height: 1.75;
+  font-size: 15px;
+}
+
+.markdown-rendered-content p {
+  margin-top: 1rem;
+  margin-bottom: 1rem;
+  line-height: 1.75;
+}
+
+.markdown-rendered-content ul {
+  list-style-type: disc;
+  padding-left: 1.5rem;
+  margin-top: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.markdown-rendered-content ol {
+  list-style-type: decimal;
+  padding-left: 1.5rem;
+  margin-top: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.markdown-rendered-content li {
+  margin-top: 0.35rem;
+  margin-bottom: 0.35rem;
+  line-height: 1.65;
+}
+
+.markdown-rendered-content hr {
+  margin-top: 2rem;
+  margin-bottom: 2rem;
+  border: 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Markdown Tables */
+.markdown-rendered-content table {
+  width: 100%;
+  margin-top: 1.5rem;
+  margin-bottom: 1.5rem;
+  border-collapse: collapse;
+  font-size: 13px;
+  border-radius: 0.75rem;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.markdown-rendered-content thead {
+  background-color: rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  text-align: left;
+}
+
+.markdown-rendered-content th {
+  padding: 0.75rem 1rem;
+  font-weight: 600;
+  color: #f1f5f9;
+  border-right: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.markdown-rendered-content th:last-child {
+  border-right: none;
+}
+
+.markdown-rendered-content td {
+  padding: 0.65rem 1rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  border-right: 1px solid rgba(255, 255, 255, 0.06);
+  color: #cbd5e1;
+}
+
+.markdown-rendered-content td:last-child {
+  border-right: none;
+}
+
+.markdown-rendered-content tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.markdown-rendered-content tbody tr:hover {
+  background-color: rgba(255, 255, 255, 0.03);
+}
+
+/* Markdown Blockquotes */
+.markdown-rendered-content blockquote {
+  margin-top: 1.25rem;
+  margin-bottom: 1.25rem;
+  padding-left: 1rem;
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+  border-left: 3px solid #f97316;
+  background-color: rgba(249, 115, 22, 0.05);
+  border-radius: 0 0.5rem 0.5rem 0;
+  font-style: italic;
+  color: #e2e8f0;
+}
+
+/* Light Theme Markdown overrides */
+.markdown-rendered-content.theme-light {
+  color: #1e293b;
+}
+
+.markdown-rendered-content.theme-light h1 {
+  color: #0f172a !important;
+  border-bottom-color: #e2e8f0 !important;
+}
+
+.markdown-rendered-content.theme-light h2 {
+  color: #1e293b !important;
+  border-bottom-color: #e2e8f0 !important;
+}
+
+.markdown-rendered-content.theme-light h3,
+.markdown-rendered-content.theme-light h4 {
+  color: #334155 !important;
+}
+
+.markdown-rendered-content.theme-light p,
+.markdown-rendered-content.theme-light li {
+  color: #475569 !important;
+}
+
+.markdown-rendered-content.theme-light strong {
+  color: #0f172a !important;
+}
+
+.markdown-rendered-content.theme-light table {
+  border-color: #e2e8f0 !important;
+}
+
+.markdown-rendered-content.theme-light thead {
+  background-color: #f8fafc !important;
+  border-bottom-color: #e2e8f0 !important;
+}
+
+.markdown-rendered-content.theme-light th {
+  color: #1e293b !important;
+  border-right-color: #e2e8f0 !important;
+}
+
+.markdown-rendered-content.theme-light td {
+  color: #475569 !important;
+  border-color: #e2e8f0 !important;
+}
+
+.markdown-rendered-content.theme-light tbody tr:nth-child(even) {
+  background-color: #f8fafc !important;
+}
+
+.markdown-rendered-content.theme-light tbody tr:hover {
+  background-color: #f1f5f9 !important;
+}
+
+.markdown-rendered-content.theme-light blockquote {
+  background-color: #fff7ed !important;
+  color: #431407 !important;
+  border-left-color: #ea580c !important;
+}
+
+.markdown-rendered-content.theme-light hr {
+  border-top-color: #e2e8f0 !important;
+}
