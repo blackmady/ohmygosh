@@ -18,18 +18,65 @@ export function encodeSharePayload(payload: SharePayload): string {
 }
 
 /**
- * Decodes a SharePayload from the current window location hash or custom URL string
+ * Decodes a SharePayload from the current window location or custom URL string
+ * Supports #data=, ?data=, #d=, ?d=, url-encoded tokens, and space-to-plus restoration
  */
 export function decodeSharePayload(hashOrUrl?: string): SharePayload | null {
   try {
-    const raw = hashOrUrl || window.location.hash;
-    if (!raw.includes(HASH_PREFIX)) {
-      return null;
+    const target = hashOrUrl || (typeof window !== 'undefined' ? window.location.href : '');
+    if (!target) return null;
+
+    let token = '';
+
+    // Search for known parameter keys in order
+    const prefixes = ['#data=', '?data=', '&data=', '#d=', '?d=', '&d='];
+    for (const prefix of prefixes) {
+      const idx = target.indexOf(prefix);
+      if (idx !== -1) {
+        let extracted = target.substring(idx + prefix.length);
+        // Strip any following query or hash parameters (& or #)
+        const nextParamIdx = extracted.search(/[&#]/);
+        if (nextParamIdx !== -1) {
+          extracted = extracted.substring(0, nextParamIdx);
+        }
+        if (extracted.trim().length > 0) {
+          token = extracted.trim();
+          break;
+        }
+      }
     }
-    const token = raw.slice(raw.indexOf(HASH_PREFIX) + HASH_PREFIX.length);
+
     if (!token) return null;
 
-    const decompressed = LZString.decompressFromEncodedURIComponent(token);
+    // 1. Try direct decoding
+    let decompressed = LZString.decompressFromEncodedURIComponent(token);
+
+    // 2. Try URL decoding (in case token has %2B, %2F, etc.)
+    if (!decompressed) {
+      try {
+        const decodedToken = decodeURIComponent(token);
+        decompressed = LZString.decompressFromEncodedURIComponent(decodedToken);
+      } catch {
+        // ignore decodeURIComponent error
+      }
+    }
+
+    // 3. Replace spaces with '+' (browsers and chat apps frequently convert '+' to ' ')
+    if (!decompressed) {
+      const plusToken = token.replace(/ /g, '+');
+      decompressed = LZString.decompressFromEncodedURIComponent(plusToken);
+    }
+
+    // 4. Try URL decode + space-to-plus replacement
+    if (!decompressed) {
+      try {
+        const plusToken = decodeURIComponent(token).replace(/ /g, '+');
+        decompressed = LZString.decompressFromEncodedURIComponent(plusToken);
+      } catch {
+        // ignore
+      }
+    }
+
     if (!decompressed) return null;
 
     const parsed = JSON.parse(decompressed) as SharePayload;
@@ -37,7 +84,7 @@ export function decodeSharePayload(hashOrUrl?: string): SharePayload | null {
       return parsed;
     }
   } catch (err) {
-    console.warn('Unable to decode share payload from URL hash:', err);
+    console.warn('Unable to decode share payload from URL:', err);
   }
   return null;
 }

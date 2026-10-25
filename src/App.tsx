@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { FileItem, SupportedLanguage, ViewMode } from './types';
 import { SAMPLE_PRESETS } from './utils/samples';
 import { detectLanguage } from './utils/language';
@@ -35,48 +35,59 @@ import {
   Cloud,
 } from 'lucide-react';
 
+// Coherent initial workspace state resolver
+function getInitialWorkspace(): {
+  files: FileItem[];
+  activeFileId: string;
+  sharedInfo: { title: string; createdAt: number; source: 'cloud' | 'hash' } | null;
+} {
+  // 1. First priority: URL share payload (#data=..., ?data=..., #d=...)
+  const shared = decodeSharePayload();
+  if (shared && shared.files.length > 0) {
+    const mapped: FileItem[] = shared.files.map((f, idx) => ({
+      id: `shared_file_${idx}_${Date.now()}`,
+      name: f.name,
+      path: f.path || f.name,
+      content: f.content,
+      language: f.language || detectLanguage(f.name, f.content),
+      size: f.content.length,
+      lastModified: shared.createdAt,
+    }));
+    const match = mapped.find((f) => f.path === shared.activePath || f.name === shared.activePath);
+    return {
+      files: mapped,
+      activeFileId: match ? match.id : mapped[0].id,
+      sharedInfo: { title: shared.title, createdAt: shared.createdAt, source: 'hash' },
+    };
+  }
+
+  // 2. Second priority: LocalStorage cached draft (Persistence)
+  const localCached = loadWorkspaceFromLocal();
+  if (localCached && localCached.files.length > 0) {
+    return {
+      files: localCached.files,
+      activeFileId: localCached.activeFileId || localCached.files[0]?.id || '',
+      sharedInfo: null,
+    };
+  }
+
+  // 3. Fallback: default preset
+  const defaultFiles = SAMPLE_PRESETS[0].files;
+  return {
+    files: defaultFiles,
+    activeFileId: defaultFiles[0]?.id || '',
+    sharedInfo: null,
+  };
+}
+
 export default function App() {
-  // Initialize with decoded share link, or local cached draft, or default preset
-  const [files, setFiles] = useState<FileItem[]>(() => {
-    // 1. Try URL Hash #data=...
-    const shared = decodeSharePayload();
-    if (shared && shared.files.length > 0) {
-      return shared.files.map((f, idx) => ({
-        id: `shared_file_${idx}_${Date.now()}`,
-        name: f.name,
-        path: f.path || f.name,
-        content: f.content,
-        language: f.language || detectLanguage(f.name, f.content),
-        size: f.content.length,
-        lastModified: shared.createdAt,
-      }));
-    }
+  const initialWorkspace = useMemo(() => getInitialWorkspace(), []);
 
-    // 2. Try LocalStorage cached draft (Persistence)
-    const localCached = loadWorkspaceFromLocal();
-    if (localCached && localCached.files.length > 0) {
-      return localCached.files;
-    }
-
-    // 3. Fallback to default preset
-    return SAMPLE_PRESETS[0].files;
-  });
-
-  const [activeFileId, setActiveFileId] = useState<string>(() => {
-    const localCached = loadWorkspaceFromLocal();
-    if (localCached && localCached.activeFileId) {
-      return localCached.activeFileId;
-    }
-    return files[0]?.id || '';
-  });
-
-  const [sharedInfo, setSharedInfo] = useState<{ title: string; createdAt: number; source: 'cloud' | 'hash' } | null>(() => {
-    const shared = decodeSharePayload();
-    if (shared) {
-      return { title: shared.title, createdAt: shared.createdAt, source: 'hash' };
-    }
-    return null;
-  });
+  const [files, setFiles] = useState<FileItem[]>(initialWorkspace.files);
+  const [activeFileId, setActiveFileId] = useState<string>(initialWorkspace.activeFileId);
+  const [sharedInfo, setSharedInfo] = useState<{ title: string; createdAt: number; source: 'cloud' | 'hash' } | null>(
+    initialWorkspace.sharedInfo
+  );
 
   const [viewMode, setViewMode] = useState<ViewMode>('split');
   const [isDragOver, setIsDragOver] = useState(false);
@@ -95,21 +106,70 @@ export default function App() {
   const folderInputRef = useRef<HTMLInputElement>(null);
   const autoSaveTimerRef = useRef<number | null>(null);
 
-  // Check URL for Cloudflare Database shortlink (#id=cp_xxx) on mount
-  useEffect(() => {
+  const showNotification = useCallback((msg: string) => {
+    setToastMsg(msg);
+    setTimeout(() => setToastMsg(null), 3500);
+  }, []);
+
+  // Dedicated loader for URL share payloads and Cloudflare snippet IDs
+  const loadFromUrl = useCallback(async () => {
+    // 1. Try URL share payload (#data=..., ?data=..., #d=...)
+    const shared = decodeSharePayload();
+    if (shared && shared.files.length > 0) {
+      const mappedFiles: FileItem[] = shared.files.map((f, idx) => ({
+        id: `shared_file_${idx}_${Date.now()}`,
+        name: f.name,
+        path: f.path || f.name,
+        content: f.content,
+        language: f.language || detectLanguage(f.name, f.content),
+        size: f.content.length,
+        lastModified: shared.createdAt,
+      }));
+      setFiles(mappedFiles);
+      const match = mappedFiles.find((f) => f.path === shared.activePath || f.name === shared.activePath);
+      setActiveFileId(match ? match.id : mappedFiles[0].id);
+      setSharedInfo({ title: shared.title, createdAt: shared.createdAt, source: 'hash' });
+      showNotification(`已载入永久分享工程: ${shared.title}`);
+      return true;
+    }
+
+    // 2. Try Cloudflare Database snippet (#id=cp_xxx)
     const snippetId = getUrlSnippetId();
     if (snippetId) {
-      loadSnippetFromCloud(snippetId).then((data) => {
-        if (data && data.files.length > 0) {
-          setFiles(data.files);
-          const match = data.files.find((f) => f.path === data.activePath || f.name === data.activePath);
-          setActiveFileId(match ? match.id : data.files[0].id);
-          setSharedInfo({ title: data.title, createdAt: data.createdAt, source: 'cloud' });
-          showNotification(`已从 Cloudflare 数据库加载短链工程: ${data.title}`);
-        }
-      });
+      const data = await loadSnippetFromCloud(snippetId);
+      if (data && data.files.length > 0) {
+        setFiles(data.files);
+        const match = data.files.find((f) => f.path === data.activePath || f.name === data.activePath);
+        setActiveFileId(match ? match.id : data.files[0].id);
+        setSharedInfo({ title: data.title, createdAt: data.createdAt, source: 'cloud' });
+        showNotification(`已从 Cloudflare 数据库加载短链工程: ${data.title}`);
+        return true;
+      } else {
+        showNotification('提示：该短链未在云端检索到（可能尚未绑定 Cloudflare D1 数据库）');
+      }
     }
-  }, []);
+    return false;
+  }, [showNotification]);
+
+  // Handle URL change dynamically without page reload
+  useEffect(() => {
+    // If not already resolved by getInitialWorkspace, trigger loadFromUrl (e.g. for async Cloud snippet)
+    const snippetId = getUrlSnippetId();
+    if (snippetId) {
+      loadFromUrl();
+    }
+
+    const handleUrlChange = () => {
+      loadFromUrl();
+    };
+
+    window.addEventListener('hashchange', handleUrlChange);
+    window.addEventListener('popstate', handleUrlChange);
+    return () => {
+      window.removeEventListener('hashchange', handleUrlChange);
+      window.removeEventListener('popstate', handleUrlChange);
+    };
+  }, [loadFromUrl]);
 
   // Debounced auto-save to localStorage on every change
   useEffect(() => {
@@ -137,11 +197,6 @@ export default function App() {
   }, [files, activeFileId]);
 
   const activeFile = files.find((f) => f.id === activeFileId) || files[0];
-
-  const showNotification = (msg: string) => {
-    setToastMsg(msg);
-    setTimeout(() => setToastMsg(null), 3000);
-  };
 
   // Quick Cloud Save (Ctrl+S / Cmd+S or button click)
   const handleQuickCloudSave = async () => {

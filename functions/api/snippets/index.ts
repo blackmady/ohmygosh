@@ -65,16 +65,18 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       }
     }
 
+    const isDatabaseBound = storageType === 'cloudflare-d1' || storageType === 'cloudflare-kv';
     const url = new URL(request.url);
-    const shortUrl = `${url.origin}/#id=${id}`;
+    const shortUrl = isDatabaseBound ? `${url.origin}/#id=${id}` : null;
 
     return new Response(
       JSON.stringify({
         success: true,
-        id,
+        id: isDatabaseBound ? id : null,
         title,
         shortUrl,
         storageType,
+        isDatabaseBound,
         totalFiles: files.length,
         sizeBytes: totalSize,
         createdAt: now,

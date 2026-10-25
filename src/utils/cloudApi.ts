@@ -1,5 +1,5 @@
 import { FileItem } from '../types';
-import { encodeSharePayload } from './compression';
+import { encodeSharePayload, decodeSharePayload } from './compression';
 import { recordCloudSnippet, saveVersionSnapshot } from './storage';
 
 export interface CloudSaveResult {
@@ -24,6 +24,20 @@ export async function saveSnippetToCloud(
   // First, always save a local version snapshot to guarantee zero data loss
   saveVersionSnapshot(title, files, activeFile);
 
+  // Always generate client-side compressed permanent link as guaranteed base
+  const permalink = encodeSharePayload({
+    v: 1,
+    title,
+    files: files.map((f) => ({
+      name: f.name,
+      path: f.path || f.name,
+      content: f.content,
+      language: f.language,
+    })),
+    activePath,
+    createdAt: now,
+  });
+
   try {
     const res = await fetch('/api/snippets', {
       method: 'POST',
@@ -45,12 +59,13 @@ export async function saveSnippetToCloud(
 
     if (res.ok) {
       const data = await res.json();
-      if (data && data.success && data.id) {
+      // Only use #id= if the server actually has D1 or KV bound
+      if (data && data.success && data.id && (data.storageType === 'cloudflare-d1' || data.storageType === 'cloudflare-kv')) {
         const result: CloudSaveResult = {
           success: true,
           id: data.id,
           shortUrl: `${window.location.origin}${window.location.pathname}#id=${data.id}`,
-          storageType: data.storageType || 'cloudflare-d1',
+          storageType: data.storageType,
           createdAt: data.createdAt || now,
         };
 
@@ -70,20 +85,7 @@ export async function saveSnippetToCloud(
     console.warn('Cloudflare /api/snippets fetch failed, falling back to permanent link:', err);
   }
 
-  // Graceful fallback: generate compressed permanent hash URL and local ID
-  const permalink = encodeSharePayload({
-    v: 1,
-    title,
-    files: files.map((f) => ({
-      name: f.name,
-      path: f.path || f.name,
-      content: f.content,
-      language: f.language,
-    })),
-    activePath,
-    createdAt: now,
-  });
-
+  // Graceful fallback: use compressed permanent hash URL (100% works without any database)
   const fallbackId = `local_${now.toString(36)}`;
   recordCloudSnippet({
     id: fallbackId,
@@ -112,6 +114,25 @@ export async function loadSnippetFromCloud(id: string): Promise<{
   activePath: string;
   createdAt: number;
 } | null> {
+  // First check if the URL also carried embedded payload data (e.g. #id=...&data=...)
+  const embeddedData = decodeSharePayload();
+  if (embeddedData && embeddedData.files.length > 0) {
+    return {
+      title: embeddedData.title,
+      files: embeddedData.files.map((f: any, idx: number) => ({
+        id: `shared_file_${idx}_${Date.now()}`,
+        name: f.name,
+        path: f.path || f.name,
+        content: f.content,
+        language: f.language,
+        size: f.content.length,
+        lastModified: embeddedData.createdAt,
+      })),
+      activePath: embeddedData.activePath || embeddedData.files[0]?.path || 'index.html',
+      createdAt: embeddedData.createdAt,
+    };
+  }
+
   try {
     const res = await fetch(`/api/snippets/${encodeURIComponent(id)}`);
     if (res.ok) {
@@ -140,13 +161,24 @@ export async function loadSnippetFromCloud(id: string): Promise<{
 }
 
 /**
- * Checks if current URL has a snippet ID (#id=... or ?id=...)
+ * Checks if current URL has a snippet ID (#id=... or ?id=...) cleanly without trailing parameters
  */
 export function getUrlSnippetId(): string | null {
+  if (typeof window === 'undefined') return null;
+
   const hash = window.location.hash;
-  if (hash.includes('#id=')) {
-    return hash.slice(hash.indexOf('#id=') + 4);
+  if (hash.includes('#id=') || hash.includes('&id=')) {
+    const match = hash.match(/[#&]id=([a-zA-Z0-9_\-]+)/);
+    if (match && match[1]) {
+      return match[1];
+    }
   }
+
   const params = new URLSearchParams(window.location.search);
-  return params.get('id');
+  const searchId = params.get('id');
+  if (searchId) {
+    return searchId.split('&')[0];
+  }
+
+  return null;
 }

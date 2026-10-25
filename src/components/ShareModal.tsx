@@ -28,11 +28,11 @@ export const ShareModal: React.FC<ShareModalProps> = ({ files, activeFile, onClo
   const [copiedEmbed, setCopiedEmbed] = useState(false);
   const [title, setTitle] = useState(activeFile.name || 'CloudPaste Snippet');
   const [showQr, setShowQr] = useState(false);
-  const [activeTab, setActiveTab] = useState<'cloud-d1' | 'permanent' | 'embed'>('cloud-d1');
+  const [activeTab, setActiveTab] = useState<'permanent' | 'cloud-d1' | 'embed'>('permanent');
   const [isSavingCloud, setIsSavingCloud] = useState(false);
   const [cloudResult, setCloudResult] = useState<CloudSaveResult | null>(null);
 
-  // Generate client-side permanent URL
+  // Generate client-side permanent URL (100% guaranteed zero server dependency)
   const permanentUrl = useMemo(() => {
     try {
       const payload: SharePayload = {
@@ -67,14 +67,15 @@ export const ShareModal: React.FC<ShareModalProps> = ({ files, activeFile, onClo
     }
   };
 
-  // Automatically save to cloud on modal open if on cloud-d1 tab
+  // Automatically save to cloud when cloud-d1 tab is opened
   useEffect(() => {
     if (activeTab === 'cloud-d1' && !cloudResult && !isSavingCloud) {
       handleSaveToCloudflare();
     }
   }, [activeTab]);
 
-  const activeDisplayUrl = cloudResult?.shortUrl || permanentUrl;
+  const isCloudBound = cloudResult?.storageType === 'cloudflare-d1' || cloudResult?.storageType === 'cloudflare-kv';
+  const activeDisplayUrl = activeTab === 'cloud-d1' && isCloudBound ? cloudResult.shortUrl : permanentUrl;
 
   const qrSvgUrl = useMemo(() => {
     return generateQrSvg(activeDisplayUrl, 200);
@@ -108,9 +109,9 @@ export const ShareModal: React.FC<ShareModalProps> = ({ files, activeFile, onClo
               <Share2 className="w-4 h-4" />
             </div>
             <div>
-              <h2 className="text-base font-semibold text-white">保存与分享链接</h2>
+              <h2 className="text-base font-semibold text-white">分享与生成永久链接</h2>
               <p className="text-xs text-neutral-400">
-                支持 Cloudflare D1 边缘数据库存储与全网永久短链
+                100% 永久有效，全设备即时打开，无需后端或服务器也能秒开
               </p>
             </div>
           </div>
@@ -125,17 +126,6 @@ export const ShareModal: React.FC<ShareModalProps> = ({ files, activeFile, onClo
         {/* Tab Switcher */}
         <div className="flex border-b border-neutral-800 px-6 pt-3 gap-6 text-xs font-medium">
           <button
-            onClick={() => setActiveTab('cloud-d1')}
-            className={`pb-3 border-b-2 transition-colors flex items-center gap-1.5 ${
-              activeTab === 'cloud-d1'
-                ? 'border-orange-500 text-orange-400 font-semibold'
-                : 'border-transparent text-neutral-400 hover:text-neutral-200'
-            }`}
-          >
-            <Database className="w-3.5 h-3.5" />
-            <span>Cloudflare 数据库短链</span>
-          </button>
-          <button
             onClick={() => setActiveTab('permanent')}
             className={`pb-3 border-b-2 transition-colors flex items-center gap-1.5 ${
               activeTab === 'permanent'
@@ -144,7 +134,18 @@ export const ShareModal: React.FC<ShareModalProps> = ({ files, activeFile, onClo
             }`}
           >
             <Link className="w-3.5 h-3.5" />
-            <span>纯前端免库永久链接</span>
+            <span>免库永久链接（首选推荐）</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('cloud-d1')}
+            className={`pb-3 border-b-2 transition-colors flex items-center gap-1.5 ${
+              activeTab === 'cloud-d1'
+                ? 'border-orange-500 text-orange-400 font-semibold'
+                : 'border-transparent text-neutral-400 hover:text-neutral-200'
+            }`}
+          >
+            <Database className="w-3.5 h-3.5" />
+            <span>Cloudflare D1 数据库短链</span>
           </button>
           <button
             onClick={() => setActiveTab('embed')}
@@ -173,18 +174,82 @@ export const ShareModal: React.FC<ShareModalProps> = ({ files, activeFile, onClo
             />
           </div>
 
+          {activeTab === 'permanent' && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-neutral-300 font-medium flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-orange-400" />
+                  <span>纯前端自包含永久链接 (100% 永久有效，全设备秒开)</span>
+                </span>
+                <button
+                  onClick={() => setShowQr(!showQr)}
+                  className="flex items-center gap-1 text-orange-400 hover:text-orange-300 transition-colors"
+                >
+                  <QrCode className="w-3.5 h-3.5" />
+                  <span>{showQr ? '收起二维码' : '扫码手机预览'}</span>
+                </button>
+              </div>
+
+              <div className="flex gap-2">
+                <div className="flex-1 bg-neutral-950 border border-neutral-800 rounded-lg px-3 py-2 font-mono text-[11px] text-neutral-300 truncate select-all">
+                  {permanentUrl}
+                </div>
+                <button
+                  onClick={handleCopyLink}
+                  className="px-4 py-2 bg-orange-600 hover:bg-orange-500 text-white rounded-lg font-medium flex items-center gap-1.5 shrink-0 transition-colors shadow-sm"
+                >
+                  {copiedLink ? <Check className="w-3.5 h-3.5 text-emerald-300" /> : <Copy className="w-3.5 h-3.5" />}
+                  <span>{copiedLink ? '已复制！' : '复制永久链接'}</span>
+                </button>
+              </div>
+
+              {/* Test link and explanation */}
+              <div className="flex items-center justify-between pt-1 text-[11px]">
+                <a
+                  href={permanentUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-orange-400 hover:text-orange-300 flex items-center gap-1 underline"
+                >
+                  <span>在新标签页测试打开此链接 ↗</span>
+                </a>
+                <span className="text-neutral-500">已自动同步本地快照</span>
+              </div>
+
+              {/* QR Code view */}
+              {showQr && (
+                <div className="flex flex-col items-center justify-center p-4 bg-neutral-950 rounded-xl border border-neutral-800 text-center animate-fade-in">
+                  <img
+                    src={qrSvgUrl}
+                    alt="CloudPaste QR Code"
+                    className="w-40 h-40 rounded-lg p-2 bg-white"
+                  />
+                  <p className="mt-2 text-[11px] text-neutral-400">
+                    手机扫码可直接在移动端浏览器访问并运行
+                  </p>
+                </div>
+              )}
+
+              <div className="p-3 bg-neutral-950/70 border border-neutral-800 rounded-lg text-neutral-400 leading-relaxed text-[11px]">
+                💡 <strong>为什么推荐此链接？</strong>基于 LZ-String 算法将所有文件和目录压缩在 URL 中，即使没有配置数据库或服务器，他人打开也能 100% 完整复原代码工程，杜绝 404 或白屏问题。
+              </div>
+            </div>
+          )}
+
           {activeTab === 'cloud-d1' && (
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <span className="text-neutral-300 font-medium">数据库短链</span>
+                  <span className="text-neutral-300 font-medium">Cloudflare 数据库短链</span>
                   {cloudResult && (
-                    <span className="px-1.5 py-0.2 bg-emerald-950 text-emerald-400 border border-emerald-800/80 rounded text-[10px] font-mono">
-                      {cloudResult.storageType === 'cloudflare-d1'
-                        ? '已存入 D1 数据库'
-                        : cloudResult.storageType === 'cloudflare-kv'
-                        ? '已存入 KV 数据库'
-                        : '已生成短链备份'}
+                    <span
+                      className={`px-1.5 py-0.2 border rounded text-[10px] font-mono ${
+                        isCloudBound
+                          ? 'bg-emerald-950 text-emerald-400 border-emerald-800/80'
+                          : 'bg-amber-950/60 text-amber-400 border-amber-800/60'
+                      }`}
+                    >
+                      {isCloudBound ? '✓ 已存入 Cloudflare D1 边缘数据库' : '未绑定 D1 数据库（已降级为免库链接）'}
                     </span>
                   )}
                 </div>
@@ -203,10 +268,10 @@ export const ShareModal: React.FC<ShareModalProps> = ({ files, activeFile, onClo
                   {isSavingCloud ? (
                     <span className="flex items-center gap-1.5 text-neutral-500">
                       <Loader2 className="w-3.5 h-3.5 animate-spin text-orange-400" />
-                      <span>正在保存至 Cloudflare 数据库...</span>
+                      <span>正在请求 Cloudflare 边缘接口...</span>
                     </span>
                   ) : (
-                    <span>{cloudResult?.shortUrl || permanentUrl}</span>
+                    <span>{activeDisplayUrl}</span>
                   )}
                 </div>
                 <button
@@ -217,6 +282,17 @@ export const ShareModal: React.FC<ShareModalProps> = ({ files, activeFile, onClo
                   {copiedLink ? <Check className="w-3.5 h-3.5 text-emerald-300" /> : <Copy className="w-3.5 h-3.5" />}
                   <span>{copiedLink ? '已复制！' : '复制短链'}</span>
                 </button>
+              </div>
+
+              <div className="flex items-center justify-between pt-1 text-[11px]">
+                <a
+                  href={activeDisplayUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-orange-400 hover:text-orange-300 flex items-center gap-1 underline"
+                >
+                  <span>在新标签页测试打开此链接 ↗</span>
+                </a>
               </div>
 
               {/* QR Code view */}
@@ -236,42 +312,14 @@ export const ShareModal: React.FC<ShareModalProps> = ({ files, activeFile, onClo
               <div className="p-3 bg-neutral-950/70 border border-neutral-800 rounded-lg text-neutral-400 leading-relaxed text-[11px] flex items-start gap-2">
                 <Cloud className="w-4 h-4 text-orange-400 shrink-0 mt-0.5" />
                 <div>
-                  数据已通过 <code className="text-neutral-200">/api/snippets</code> 保存至 Cloudflare 数据库，同时在你的浏览器中建立了本地持久化缓存。他人通过短链访问时，Cloudflare 边缘节点将以极速返回内容。
+                  {isCloudBound ? (
+                    <span>已持久化存入 Cloudflare 边缘数据库，他人访问短链将由全球 300+ 边缘节点极速响应。</span>
+                  ) : (
+                    <span>
+                      提示：如果您尚未在 Cloudflare 控制台绑定 D1 数据库（变量名 <code className="text-orange-300 font-bold">DB</code>），系统已自动回退生成免库永久链接，保证代码绝对不会丢失或 404！
+                    </span>
+                  )}
                 </div>
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'permanent' && (
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-neutral-300 font-medium">
-                  纯客户端压缩链接 (无需任何数据库即可永久生效)
-                </span>
-                <button
-                  onClick={() => setShowQr(!showQr)}
-                  className="flex items-center gap-1 text-orange-400 hover:text-orange-300 transition-colors"
-                >
-                  <QrCode className="w-3.5 h-3.5" />
-                  <span>{showQr ? '收起二维码' : '扫码手机预览'}</span>
-                </button>
-              </div>
-
-              <div className="flex gap-2">
-                <div className="flex-1 bg-neutral-950 border border-neutral-800 rounded-lg px-3 py-2 font-mono text-[11px] text-neutral-400 truncate select-all">
-                  {permanentUrl}
-                </div>
-                <button
-                  onClick={handleCopyLink}
-                  className="px-4 py-2 bg-orange-600 hover:bg-orange-500 text-white rounded-lg font-medium flex items-center gap-1.5 shrink-0 transition-colors shadow-sm"
-                >
-                  {copiedLink ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                  <span>{copiedLink ? '已复制！' : '复制链接'}</span>
-                </button>
-              </div>
-
-              <div className="p-3 bg-neutral-950/70 border border-neutral-800 rounded-lg text-neutral-400 leading-relaxed text-[11px]">
-                基于高倍率 LZ-String 算法将所有文件压缩于 URL 中，任何即使没有配置数据库的静态站点亦可实现 100% 永久有效且免服务器。
               </div>
             </div>
           )}
