@@ -27,6 +27,7 @@ import { ShareModal } from './components/ShareModal';
 import { VsCodeComparisonModal } from './components/VsCodeComparisonModal';
 import { CloudflareGuideModal } from './components/CloudflareGuideModal';
 import { CloudDatabaseModal } from './components/CloudDatabaseModal';
+import { SaveProjectModal } from './components/SaveProjectModal';
 import {
   UploadCloud,
   Link as LinkIcon,
@@ -95,8 +96,16 @@ export default function App() {
   const [isSavingToCloud, setIsSavingToCloud] = useState(false);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
 
+  // Project identity (single version per project)
+  const [currentProjectId, setCurrentProjectId] = useState<string | null>(() => getUrlSnippetId());
+  const [projectTitle, setProjectTitle] = useState<string>(() => {
+    const initial = getInitialWorkspace();
+    return initial.sharedInfo?.title || '我的代码工程';
+  });
+
   // Modals
   const [showShareModal, setShowShareModal] = useState(false);
+  const [showSaveModal, setShowSaveModal] = useState(false);
   const [showVsCodeModal, setShowVsCodeModal] = useState(false);
   const [showDeployGuide, setShowDeployGuide] = useState(false);
   const [showDatabaseModal, setShowDatabaseModal] = useState(false);
@@ -122,6 +131,8 @@ export default function App() {
         setFiles(data.files);
         const match = data.files.find((f) => f.path === data.activePath || f.name === data.activePath);
         setActiveFileId(match ? match.id : data.files[0].id);
+        setCurrentProjectId(snippetId);
+        setProjectTitle(data.title || '代码工程');
         setSharedInfo({ title: data.title, createdAt: data.createdAt, source: 'cloud' });
         showNotification(`已成功载入云端项目: ${data.title} (ID: ${snippetId})`);
         return true;
@@ -146,6 +157,7 @@ export default function App() {
       setFiles(mappedFiles);
       const match = mappedFiles.find((f) => f.path === shared.activePath || f.name === shared.activePath);
       setActiveFileId(match ? match.id : mappedFiles[0].id);
+      setProjectTitle(shared.title || '代码工程');
       setSharedInfo({ title: shared.title, createdAt: shared.createdAt, source: 'hash' });
       showNotification(`已载入工程: ${shared.title}`);
       return true;
@@ -200,17 +212,31 @@ export default function App() {
 
   const activeFile = files.find((f) => f.id === activeFileId) || files[0];
 
-  // Quick Cloud Save (Ctrl+S / Cmd+S or button click)
-  const handleQuickCloudSave = async () => {
+  // Open Save Project Modal (Ctrl+S / Cmd+S or button click)
+  const handleQuickCloudSave = () => {
+    setShowSaveModal(true);
+  };
+
+  // Confirm save from modal with project naming and single-version enforcement
+  const handleConfirmSaveProject = async (name: string, asNew: boolean) => {
     if (!activeFile) return;
     setIsSavingToCloud(true);
+    const targetId = asNew ? null : currentProjectId;
     try {
-      const res = await saveSnippetToCloud(activeFile.name, files, activeFile);
+      const res = await saveSnippetToCloud(name, files, activeFile, targetId);
       if (res.success && res.id) {
+        setCurrentProjectId(res.id);
+        setProjectTitle(name);
         window.location.hash = `#id=${res.id}`;
-        showNotification(`✓ 已成功存入 Cloudflare 数据库表 snippets (ID: ${res.id})`);
+        showNotification(
+          targetId
+            ? `✓ 项目「${name}」已更新 (ID: ${res.id}) · 单一最新版本已同步`
+            : `✓ 项目「${name}」已保存 (ID: ${res.id}) · 已分配专属短链`
+        );
+        setShowSaveModal(false);
       } else {
         showNotification(`⚠️ 未能存入数据库: ${res.error || 'D1 数据库未绑定'}`);
+        setShowSaveModal(false);
         setShowDatabaseModal(true);
       }
     } catch (err: any) {
@@ -226,12 +252,12 @@ export default function App() {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
         e.preventDefault();
-        handleQuickCloudSave();
+        setShowSaveModal(true);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [files, activeFile]);
+  }, []);
 
   // Update file content
   const handleContentChange = (newContent: string) => {
@@ -294,6 +320,8 @@ export default function App() {
     if (!preset) return;
 
     setSharedInfo(null);
+    setCurrentProjectId(null);
+    setProjectTitle(preset.title);
     setFiles(preset.files);
     const targetFile = preset.files.find((f) => f.path === preset.activePath) || preset.files[0];
     if (targetFile) {
@@ -303,16 +331,21 @@ export default function App() {
   };
 
   // Restore snapshot from database modal
-  const handleRestoreSnapshot = (restoredFiles: FileItem[], activePath: string) => {
+  const handleRestoreSnapshot = (restoredFiles: FileItem[], activePath: string, title?: string, id?: string) => {
     setFiles(restoredFiles);
     const target = restoredFiles.find((f) => f.path === activePath || f.name === activePath);
     setActiveFileId(target ? target.id : restoredFiles[0]?.id || '');
-    showNotification(`已恢复历史快照 (${restoredFiles.length} 个文件)`);
+    if (title) setProjectTitle(title);
+    if (id) setCurrentProjectId(id);
+    showNotification(`已恢复项目: ${title || '代码工程'} (${restoredFiles.length} 个文件)`);
   };
 
   // New Empty Snippet
   const handleNewSnippet = () => {
     setSharedInfo(null);
+    setCurrentProjectId(null);
+    setProjectTitle('新代码工程');
+    window.location.hash = '';
     clearLocalWorkspaceCache();
     const emptyFile: FileItem = {
       id: `file_${Date.now()}`,
@@ -466,6 +499,8 @@ export default function App() {
         isSavingToCloud={isSavingToCloud}
         cacheStatusText={cacheStatusText}
         onQuickCloudSave={handleQuickCloudSave}
+        projectTitle={projectTitle}
+        currentProjectId={currentProjectId}
       />
 
       {/* Shared Snippet Kicker Banner */}
@@ -559,12 +594,32 @@ export default function App() {
       </div>
 
       {/* Modals */}
+      {showSaveModal && activeFile && (
+        <SaveProjectModal
+          isOpen={showSaveModal}
+          onClose={() => setShowSaveModal(false)}
+          files={files}
+          activeFile={activeFile}
+          currentProjectId={currentProjectId}
+          initialTitle={projectTitle}
+          isSaving={isSavingToCloud}
+          onConfirmSave={handleConfirmSaveProject}
+        />
+      )}
+
       {showShareModal && activeFile && (
         <ShareModal
           files={files}
           activeFile={activeFile}
           onClose={() => setShowShareModal(false)}
           onOpenDeployGuide={() => setShowDeployGuide(true)}
+          initialTitle={projectTitle}
+          currentProjectId={currentProjectId}
+          onSavedSnippet={(id, title) => {
+            setCurrentProjectId(id);
+            setProjectTitle(title);
+            window.location.hash = `#id=${id}`;
+          }}
         />
       )}
 

@@ -25,6 +25,9 @@ interface ShareModalProps {
   activeFile: FileItem;
   onClose: () => void;
   onOpenDeployGuide?: () => void;
+  initialTitle?: string;
+  currentProjectId?: string | null;
+  onSavedSnippet?: (id: string, title: string) => void;
 }
 
 export const ShareModal: React.FC<ShareModalProps> = ({
@@ -32,11 +35,14 @@ export const ShareModal: React.FC<ShareModalProps> = ({
   activeFile,
   onClose,
   onOpenDeployGuide,
+  initialTitle,
+  currentProjectId,
+  onSavedSnippet,
 }) => {
   const [copiedLink, setCopiedLink] = useState(false);
   const [copiedId, setCopiedId] = useState(false);
   const [copiedEmbed, setCopiedEmbed] = useState(false);
-  const [title, setTitle] = useState(activeFile.name || 'CloudPaste Project');
+  const [title, setTitle] = useState(initialTitle || activeFile.name || 'CloudPaste Project');
   const [showQr, setShowQr] = useState(false);
   const [showEmbed, setShowEmbed] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -52,12 +58,15 @@ export const ShareModal: React.FC<ShareModalProps> = ({
     return `${(totalSize / (1024 * 1024)).toFixed(2)} MB`;
   }, [totalSize]);
 
-  // Execute database save
+  // Execute database save (single version per project: updates existing project if currentProjectId exists)
   const handleSaveToDatabase = async () => {
     setIsSaving(true);
     try {
-      const res = await saveSnippetToCloud(title, files, activeFile);
+      const res = await saveSnippetToCloud(title, files, activeFile, currentProjectId);
       setCloudResult(res);
+      if (res.success && res.id && onSavedSnippet) {
+        onSavedSnippet(res.id, title);
+      }
     } catch (err: any) {
       setCloudResult({
         success: false,

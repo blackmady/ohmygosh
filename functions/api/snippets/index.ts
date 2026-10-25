@@ -88,21 +88,33 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     const totalSize = files.reduce((acc: number, f: any) => acc + (f.content?.length || 0), 0);
     const now = Date.now();
 
-    // Unique short ID: e.g. cp_m12xyz_9a2b
-    const id = `cp_${now.toString(36).slice(-5)}_${Math.random().toString(36).substring(2, 6)}`;
+    // Single version per project policy:
+    // If body.id is provided, update that exact project; otherwise generate a new unique ID
+    const rawId = typeof body.id === 'string' ? body.id.trim() : '';
+    const id = rawId.length > 0
+      ? rawId.replace(/^[#?]/, '').split('&')[0]
+      : `cp_${now.toString(36).slice(-5)}_${Math.random().toString(36).substring(2, 6)}`;
     const filesJson = JSON.stringify(files);
 
     const d1 = getD1(env);
     const kv = getKV(env);
 
-    // 1. Primary: Cloudflare D1 SQL Database
+    // 1. Primary: Cloudflare D1 SQL Database (Upsert: one project keeps only one version)
     if (d1) {
       try {
         await ensureD1Table(d1);
 
-        await d1.prepare(
-          `INSERT INTO snippets (id, title, files, active_path, total_files, size_bytes, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-        )
+        await d1.prepare(`
+          INSERT INTO snippets (id, title, files, active_path, total_files, size_bytes, created_at, updated_at) 
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT(id) DO UPDATE SET
+            title = excluded.title,
+            files = excluded.files,
+            active_path = excluded.active_path,
+            total_files = excluded.total_files,
+            size_bytes = excluded.size_bytes,
+            updated_at = excluded.updated_at
+        `)
           .bind(id, title, filesJson, activePath, files.length, totalSize, now, now)
           .run();
 
@@ -119,7 +131,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
             totalFiles: files.length,
             sizeBytes: totalSize,
             createdAt: now,
-            message: '已成功存入 Cloudflare D1 边缘数据库表 snippets',
+            message: '已成功保存至 Cloudflare D1 边缘数据库 (单个项目单一版本)',
           }),
           { status: 200, headers: CORS_HEADERS }
         );

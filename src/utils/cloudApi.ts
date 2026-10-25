@@ -88,7 +88,8 @@ export async function fetchCloudSnippetsList(): Promise<CloudSnippetListItem[]> 
 export async function saveSnippetToCloud(
   title: string,
   files: FileItem[],
-  activeFile: FileItem
+  activeFile: FileItem,
+  existingId?: string | null
 ): Promise<CloudSaveResult> {
   const activePath = activeFile.path || activeFile.name;
   const now = Date.now();
@@ -104,6 +105,7 @@ export async function saveSnippetToCloud(
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
+        id: existingId || undefined,
         title,
         files: files.map((f) => ({
           name: f.name,

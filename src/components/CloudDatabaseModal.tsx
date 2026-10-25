@@ -37,7 +37,7 @@ import {
 
 interface CloudDatabaseModalProps {
   onClose: () => void;
-  onRestoreSnapshot: (files: FileItem[], activePath: string) => void;
+  onRestoreSnapshot: (files: FileItem[], activePath: string, title?: string, id?: string) => void;
 }
 
 export const CloudDatabaseModal: React.FC<CloudDatabaseModalProps> = ({
@@ -105,7 +105,7 @@ export const CloudDatabaseModal: React.FC<CloudDatabaseModalProps> = ({
   const handleLoadRemoteSnippet = async (id: string) => {
     const data = await loadSnippetFromCloud(id);
     if (data && data.files.length > 0) {
-      onRestoreSnapshot(data.files, data.activePath);
+      onRestoreSnapshot(data.files, data.activePath, data.title, id);
       window.location.hash = `#id=${id}`;
       onClose();
     } else {

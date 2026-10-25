@@ -11,6 +11,7 @@ import {
   Cloud,
   CheckCircle2,
   Loader2,
+  Save,
 } from 'lucide-react';
 import { ViewMode } from '../types';
 
@@ -30,6 +31,8 @@ interface NavbarProps {
   isSavingToCloud?: boolean;
   cacheStatusText?: string;
   onQuickCloudSave?: () => void;
+  projectTitle?: string;
+  currentProjectId?: string | null;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -48,13 +51,15 @@ export const Navbar: React.FC<NavbarProps> = ({
   isSavingToCloud = false,
   cacheStatusText = '草稿已缓存',
   onQuickCloudSave,
+  projectTitle = '我的代码工程',
+  currentProjectId = null,
 }) => {
   const [showPresetsMenu, setShowPresetsMenu] = React.useState(false);
   const [showUploadMenu, setShowUploadMenu] = React.useState(false);
 
   return (
     <header className="flex items-center justify-between gap-8 px-6 py-3 bg-neutral-900 border-b border-neutral-800 text-xs select-none relative z-30">
-      {/* Zone 1: Single text element wordmark */}
+      {/* Zone 1: Wordmark & Project Name */}
       <div className="flex items-center gap-3 shrink-0">
         <a
           href="/"
@@ -69,8 +74,24 @@ export const Navbar: React.FC<NavbarProps> = ({
           <span>CloudPaste</span>
         </a>
 
+        {/* Project Name Breadcrumb */}
+        <div className="hidden sm:flex items-center gap-1.5 text-xs max-w-[180px] md:max-w-[260px] truncate">
+          <span className="text-neutral-600">/</span>
+          <span
+            className="text-neutral-200 font-medium truncate"
+            title={`${projectTitle} ${currentProjectId ? `(ID: ${currentProjectId})` : ''}`}
+          >
+            {projectTitle}
+          </span>
+          {currentProjectId && (
+            <span className="text-[10px] text-neutral-500 font-mono px-1 py-0.2 bg-neutral-950 border border-neutral-800 rounded shrink-0">
+              {currentProjectId}
+            </span>
+          )}
+        </div>
+
         {/* Local cache indicator */}
-        <div className="hidden sm:flex items-center gap-1.5 text-[11px] text-neutral-400 font-mono px-2 py-0.5 rounded bg-neutral-950 border border-neutral-800/80">
+        <div className="hidden md:flex items-center gap-1.5 text-[11px] text-neutral-400 font-mono px-2 py-0.5 rounded bg-neutral-950 border border-neutral-800/80">
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
           <span>{cacheStatusText}</span>
         </div>
@@ -262,20 +283,20 @@ export const Navbar: React.FC<NavbarProps> = ({
           <Download className="w-4 h-4" />
         </button>
 
-        {/* Quick Cloud Save Button (Ctrl+S) */}
+        {/* Save Button (Ctrl+S) */}
         {onQuickCloudSave && (
           <button
             onClick={onQuickCloudSave}
             disabled={isSavingToCloud}
-            title="保存至 Cloudflare 数据库与本地快照 (Ctrl+S)"
-            className="hidden md:flex items-center gap-1 px-3 py-1.5 bg-neutral-800 hover:bg-neutral-700 text-neutral-200 rounded-lg text-xs font-medium transition-colors border border-neutral-700"
+            title="保存项目至云端数据库 (Ctrl+S)"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-neutral-800 hover:bg-neutral-700 text-neutral-200 rounded-lg text-xs font-medium transition-colors border border-neutral-700 cursor-pointer disabled:opacity-50"
           >
             {isSavingToCloud ? (
               <Loader2 className="w-3.5 h-3.5 animate-spin text-orange-400" />
             ) : (
-              <Cloud className="w-3.5 h-3.5 text-orange-400" />
+              <Save className="w-3.5 h-3.5 text-orange-400" />
             )}
-            <span>{isSavingToCloud ? '存入云端...' : '存入数据库'}</span>
+            <span>{isSavingToCloud ? '保存中...' : '保存'}</span>
           </button>
         )}
 

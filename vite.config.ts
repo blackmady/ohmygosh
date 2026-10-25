@@ -57,7 +57,10 @@ function devSnippetApiPlugin(): Plugin {
               const activePath = body.activePath || files[0]?.path || 'index.html';
               const totalSize = files.reduce((acc: number, f: any) => acc + (f.content?.length || 0), 0);
               const now = Date.now();
-              const id = `cp_${now.toString(36).slice(-5)}_${Math.random().toString(36).substring(2, 6)}`;
+              const rawId = typeof body.id === 'string' ? body.id.trim() : '';
+              const id = rawId.length > 0
+                ? rawId.replace(/^[#?]/, '').split('&')[0]
+                : `cp_${now.toString(36).slice(-5)}_${Math.random().toString(36).substring(2, 6)}`;
 
               const snippetData = {
                 id,
@@ -66,7 +69,8 @@ function devSnippetApiPlugin(): Plugin {
                 activePath,
                 totalFiles: files.length,
                 sizeBytes: totalSize,
-                createdAt: now,
+                createdAt: devSnippets.get(id)?.createdAt || now,
+                updatedAt: now,
                 storageType: 'cloudflare-d1',
               };
 
