@@ -6,14 +6,13 @@ import { SvgPreview } from './preview/SvgPreview';
 import { MarkdownPreview } from './preview/MarkdownPreview';
 import { CsvPreview } from './preview/CsvPreview';
 import { JsonPreview } from './preview/JsonPreview';
+import { CodeHighlighterPreview } from './preview/CodeHighlighterPreview';
 import {
   Monitor,
   Tablet,
   Smartphone,
   Maximize2,
   Minimize2,
-  Code2,
-  ExternalLink,
   Eye,
 } from 'lucide-react';
 
@@ -32,8 +31,6 @@ export const PreviewPanel: React.FC<PreviewPanelProps> = ({
 }) => {
   const [device, setDevice] = useState<DeviceViewport>('desktop');
   const [isFullscreen, setIsFullscreen] = useState(false);
-
-  const isPreviewable = isLanguagePreviewable(currentFile.language);
 
   // Device width wrapper
   const getDeviceWidth = () => {
@@ -56,25 +53,7 @@ export const PreviewPanel: React.FC<PreviewPanelProps> = ({
       case 'json':
         return <JsonPreview currentFile={currentFile} />;
       default:
-        return (
-          <div className="flex-1 flex flex-col items-center justify-center p-8 text-center bg-neutral-950 text-neutral-400">
-            <div className="w-12 h-12 rounded-xl bg-neutral-900 border border-neutral-800 flex items-center justify-center mb-4 text-orange-400">
-              <Code2 className="w-6 h-6" />
-            </div>
-            <h3 className="text-base font-semibold text-neutral-200 mb-2">
-              {currentFile.language.toUpperCase()} 源码模式
-            </h3>
-            <p className="text-xs text-neutral-400 max-w-md leading-relaxed mb-6">
-              当前文件为代码源码格式。前端视窗（HTML、SVG、Markdown、CSV、JSON）支持即时渲染，其他格式可在左侧完整编辑并通过永久链接与压缩包快速分享。
-            </p>
-            <button
-              onClick={() => onChangeViewMode('code')}
-              className="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 text-neutral-200 rounded-lg text-xs font-medium transition-colors"
-            >
-              切换至纯代码视窗
-            </button>
-          </div>
-        );
+        return <CodeHighlighterPreview currentFile={currentFile} />;
     }
   };
 

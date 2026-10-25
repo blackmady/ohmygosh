@@ -4,7 +4,7 @@ export interface LanguageMeta {
   id: SupportedLanguage;
   name: string;
   extensions: string[];
-  prismLanguage: string;
+  hljsLanguage: string;
   isPreviewable: boolean;
   mime: string;
 }
@@ -14,7 +14,7 @@ export const LANGUAGE_LIST: LanguageMeta[] = [
     id: 'html',
     name: 'HTML',
     extensions: ['html', 'htm'],
-    prismLanguage: 'html',
+    hljsLanguage: 'xml',
     isPreviewable: true,
     mime: 'text/html',
   },
@@ -22,7 +22,7 @@ export const LANGUAGE_LIST: LanguageMeta[] = [
     id: 'svg',
     name: 'SVG Vector',
     extensions: ['svg'],
-    prismLanguage: 'svg',
+    hljsLanguage: 'xml',
     isPreviewable: true,
     mime: 'image/svg+xml',
   },
@@ -30,7 +30,7 @@ export const LANGUAGE_LIST: LanguageMeta[] = [
     id: 'markdown',
     name: 'Markdown',
     extensions: ['md', 'markdown', 'mdown'],
-    prismLanguage: 'markdown',
+    hljsLanguage: 'markdown',
     isPreviewable: true,
     mime: 'text/markdown',
   },
@@ -38,7 +38,7 @@ export const LANGUAGE_LIST: LanguageMeta[] = [
     id: 'csv',
     name: 'CSV Data',
     extensions: ['csv'],
-    prismLanguage: 'text',
+    hljsLanguage: 'plaintext',
     isPreviewable: true,
     mime: 'text/csv',
   },
@@ -46,7 +46,7 @@ export const LANGUAGE_LIST: LanguageMeta[] = [
     id: 'tsv',
     name: 'TSV Data',
     extensions: ['tsv'],
-    prismLanguage: 'text',
+    hljsLanguage: 'plaintext',
     isPreviewable: true,
     mime: 'text/tab-separated-values',
   },
@@ -54,7 +54,7 @@ export const LANGUAGE_LIST: LanguageMeta[] = [
     id: 'json',
     name: 'JSON',
     extensions: ['json'],
-    prismLanguage: 'json',
+    hljsLanguage: 'json',
     isPreviewable: true,
     mime: 'application/json',
   },
@@ -62,7 +62,7 @@ export const LANGUAGE_LIST: LanguageMeta[] = [
     id: 'javascript',
     name: 'JavaScript',
     extensions: ['js', 'mjs', 'cjs'],
-    prismLanguage: 'javascript',
+    hljsLanguage: 'javascript',
     isPreviewable: false,
     mime: 'text/javascript',
   },
@@ -70,7 +70,7 @@ export const LANGUAGE_LIST: LanguageMeta[] = [
     id: 'typescript',
     name: 'TypeScript',
     extensions: ['ts', 'tsx'],
-    prismLanguage: 'typescript',
+    hljsLanguage: 'typescript',
     isPreviewable: false,
     mime: 'text/typescript',
   },
@@ -78,7 +78,7 @@ export const LANGUAGE_LIST: LanguageMeta[] = [
     id: 'css',
     name: 'CSS',
     extensions: ['css', 'scss', 'less'],
-    prismLanguage: 'css',
+    hljsLanguage: 'css',
     isPreviewable: false,
     mime: 'text/css',
   },
@@ -86,7 +86,7 @@ export const LANGUAGE_LIST: LanguageMeta[] = [
     id: 'python',
     name: 'Python',
     extensions: ['py'],
-    prismLanguage: 'python',
+    hljsLanguage: 'python',
     isPreviewable: false,
     mime: 'text/x-python',
   },
@@ -94,7 +94,7 @@ export const LANGUAGE_LIST: LanguageMeta[] = [
     id: 'sql',
     name: 'SQL',
     extensions: ['sql'],
-    prismLanguage: 'sql',
+    hljsLanguage: 'sql',
     isPreviewable: false,
     mime: 'text/x-sql',
   },
@@ -102,7 +102,7 @@ export const LANGUAGE_LIST: LanguageMeta[] = [
     id: 'yaml',
     name: 'YAML',
     extensions: ['yaml', 'yml'],
-    prismLanguage: 'yaml',
+    hljsLanguage: 'yaml',
     isPreviewable: false,
     mime: 'text/yaml',
   },
@@ -110,7 +110,7 @@ export const LANGUAGE_LIST: LanguageMeta[] = [
     id: 'bash',
     name: 'Shell / Bash',
     extensions: ['sh', 'bash', 'zsh'],
-    prismLanguage: 'bash',
+    hljsLanguage: 'bash',
     isPreviewable: false,
     mime: 'application/x-sh',
   },
@@ -118,7 +118,7 @@ export const LANGUAGE_LIST: LanguageMeta[] = [
     id: 'rust',
     name: 'Rust',
     extensions: ['rs'],
-    prismLanguage: 'rust',
+    hljsLanguage: 'rust',
     isPreviewable: false,
     mime: 'text/rust',
   },
@@ -126,7 +126,7 @@ export const LANGUAGE_LIST: LanguageMeta[] = [
     id: 'go',
     name: 'Go',
     extensions: ['go'],
-    prismLanguage: 'go',
+    hljsLanguage: 'go',
     isPreviewable: false,
     mime: 'text/x-go',
   },
@@ -134,7 +134,7 @@ export const LANGUAGE_LIST: LanguageMeta[] = [
     id: 'java',
     name: 'Java',
     extensions: ['java'],
-    prismLanguage: 'java',
+    hljsLanguage: 'java',
     isPreviewable: false,
     mime: 'text/x-java-source',
   },
@@ -142,7 +142,7 @@ export const LANGUAGE_LIST: LanguageMeta[] = [
     id: 'cpp',
     name: 'C / C++',
     extensions: ['cpp', 'c', 'h', 'hpp', 'cc'],
-    prismLanguage: 'cpp',
+    hljsLanguage: 'cpp',
     isPreviewable: false,
     mime: 'text/x-c',
   },
@@ -150,7 +150,7 @@ export const LANGUAGE_LIST: LanguageMeta[] = [
     id: 'text',
     name: 'Plain Text',
     extensions: ['txt', 'log'],
-    prismLanguage: 'text',
+    hljsLanguage: 'plaintext',
     isPreviewable: false,
     mime: 'text/plain',
   },
@@ -189,10 +189,10 @@ export function detectLanguage(fileName: string, content?: string): SupportedLan
     if (trimmed.includes(',') && trimmed.split('\n')[0].split(',').length >= 2) {
       return 'csv';
     }
-    if (trimmed.startsWith('def ') || trimmed.includes('import ') && trimmed.includes(':')) {
+    if (trimmed.startsWith('def ') || (trimmed.includes('import ') && trimmed.includes(':'))) {
       return 'python';
     }
-    if (trimmed.startsWith('SELECT ') || trimmed.startsWith('CREATE TABLE ') || trimmed.includes('FROM ') && trimmed.includes('WHERE ')) {
+    if (trimmed.startsWith('SELECT ') || trimmed.startsWith('CREATE TABLE ') || (trimmed.includes('FROM ') && trimmed.includes('WHERE '))) {
       return 'sql';
     }
   }
@@ -203,4 +203,9 @@ export function detectLanguage(fileName: string, content?: string): SupportedLan
 export function isLanguagePreviewable(language: SupportedLanguage): boolean {
   const match = LANGUAGE_LIST.find((item) => item.id === language);
   return match?.isPreviewable ?? false;
+}
+
+export function getHljsLanguage(language: SupportedLanguage): string {
+  const match = LANGUAGE_LIST.find((item) => item.id === language);
+  return match?.hljsLanguage ?? 'plaintext';
 }

@@ -1,26 +1,10 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
-import Prism from 'prismjs';
-import 'prismjs/components/prism-javascript';
-import 'prismjs/components/prism-typescript';
-import 'prismjs/components/prism-jsx';
-import 'prismjs/components/prism-tsx';
-import 'prismjs/components/prism-css';
-import 'prismjs/components/prism-markup'; // html, xml, svg
-import 'prismjs/components/prism-markdown';
-import 'prismjs/components/prism-json';
-import 'prismjs/components/prism-python';
-import 'prismjs/components/prism-sql';
-import 'prismjs/components/prism-bash';
-import 'prismjs/components/prism-yaml';
-import 'prismjs/components/prism-rust';
-import 'prismjs/components/prism-go';
-import 'prismjs/components/prism-java';
-import 'prismjs/components/prism-c';
-import 'prismjs/components/prism-cpp';
+import React, { useState, useRef, useMemo } from 'react';
+import hljs from 'highlight.js';
+import 'highlight.js/styles/atom-one-dark.css';
 
 import { FileItem, SupportedLanguage } from '../types';
-import { LANGUAGE_LIST } from '../utils/language';
-import { Copy, Check, WrapText, Wand2, Search, X } from 'lucide-react';
+import { LANGUAGE_LIST, getHljsLanguage } from '../utils/language';
+import { Copy, Check, WrapText, Wand2, Search, X, Eye, Edit3 } from 'lucide-react';
 
 interface CodeEditorProps {
   file: FileItem;
@@ -38,6 +22,7 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
   const [showSearch, setShowSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [replaceQuery, setReplaceQuery] = useState('');
+  const [editorMode, setEditorMode] = useState<'edit' | 'highlight'>('edit');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const lineNumbersRef = useRef<HTMLDivElement>(null);
 
@@ -45,6 +30,22 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
   const lines = useMemo(() => {
     return file.content.split('\n');
   }, [file.content]);
+
+  // Syntax highlighted HTML via highlight.js
+  const highlightedCode = useMemo(() => {
+    try {
+      const hljsLang = getHljsLanguage(file.language);
+      if (hljs.getLanguage(hljsLang)) {
+        return hljs.highlight(file.content, { language: hljsLang, ignoreIllegals: true }).value;
+      }
+      return hljs.highlightAuto(file.content).value;
+    } catch {
+      return file.content
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+    }
+  }, [file.content, file.language]);
 
   // Handle Tab key
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -86,7 +87,6 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
         const formatted = JSON.stringify(JSON.parse(file.content), null, 2);
         onChangeContent(formatted);
       } else if (file.language === 'html' || file.language === 'svg') {
-        // Simple HTML indent formatter
         const formatted = formatHtml(file.content);
         onChangeContent(formatted);
       }
@@ -127,9 +127,37 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
 
         {/* Quick Tools */}
         <div className="flex items-center gap-1.5">
+          {/* Toggle between Edit mode and Syntax View mode */}
+          <div className="flex items-center bg-neutral-800 rounded p-0.5">
+            <button
+              onClick={() => setEditorMode('edit')}
+              title="编辑模式"
+              className={`flex items-center gap-1 px-2 py-0.5 rounded text-[11px] transition-colors ${
+                editorMode === 'edit'
+                  ? 'bg-neutral-700 text-white shadow-sm font-medium'
+                  : 'text-neutral-400 hover:text-white'
+              }`}
+            >
+              <Edit3 className="w-3 h-3" />
+              <span>编辑</span>
+            </button>
+            <button
+              onClick={() => setEditorMode('highlight')}
+              title="高亮视图"
+              className={`flex items-center gap-1 px-2 py-0.5 rounded text-[11px] transition-colors ${
+                editorMode === 'highlight'
+                  ? 'bg-neutral-700 text-white shadow-sm font-medium'
+                  : 'text-neutral-400 hover:text-white'
+              }`}
+            >
+              <Eye className="w-3 h-3" />
+              <span>高亮</span>
+            </button>
+          </div>
+
           <button
             onClick={() => setShowSearch(!showSearch)}
-            title="查找 / 替换 (Ctrl+F)"
+            title="查找 / 替换"
             className={`p-1.5 rounded transition-colors ${
               showSearch ? 'bg-neutral-800 text-orange-400' : 'text-neutral-400 hover:text-white hover:bg-neutral-800'
             }`}
@@ -213,25 +241,40 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
           ))}
         </div>
 
-        {/* Textarea Editor */}
+        {/* Content area: Edit Mode or Highlight Mode */}
         <div className="flex-1 relative overflow-hidden h-full">
-          <textarea
-            ref={textareaRef}
-            value={file.content}
-            onChange={(e) => onChangeContent(e.target.value)}
-            onKeyDown={handleKeyDown}
-            onScroll={handleScroll}
-            spellCheck={false}
-            autoCapitalize="off"
-            autoCorrect="off"
-            placeholder="在此粘贴或输入任何格式的代码/文本..."
-            style={{
-              tabSize: 2,
-              whiteSpace: wordWrap ? 'pre-wrap' : 'pre',
-              wordBreak: wordWrap ? 'break-all' : 'normal',
-            }}
-            className="w-full h-full p-3 font-mono text-[13px] leading-6 bg-transparent text-neutral-200 outline-none resize-none overflow-auto border-0 select-text"
-          />
+          {editorMode === 'edit' ? (
+            <textarea
+              ref={textareaRef}
+              value={file.content}
+              onChange={(e) => onChangeContent(e.target.value)}
+              onKeyDown={handleKeyDown}
+              onScroll={handleScroll}
+              spellCheck={false}
+              autoCapitalize="off"
+              autoCorrect="off"
+              placeholder="在此粘贴或输入任何格式的代码/文本..."
+              style={{
+                tabSize: 2,
+                whiteSpace: wordWrap ? 'pre-wrap' : 'pre',
+                wordBreak: wordWrap ? 'break-all' : 'normal',
+              }}
+              className="w-full h-full p-3 font-mono text-[13px] leading-6 bg-transparent text-neutral-200 outline-none resize-none overflow-auto border-0 select-text"
+            />
+          ) : (
+            <div
+              className="w-full h-full p-3 font-mono text-[13px] leading-6 overflow-auto select-text"
+              style={{
+                whiteSpace: wordWrap ? 'pre-wrap' : 'pre',
+                wordBreak: wordWrap ? 'break-all' : 'normal',
+              }}
+            >
+              <code
+                className="hljs !bg-transparent !p-0"
+                dangerouslySetInnerHTML={{ __html: highlightedCode }}
+              />
+            </div>
+          )}
         </div>
       </div>
 
@@ -264,7 +307,13 @@ function formatHtml(html: string): string {
       indent = Math.max(0, indent - 1);
     }
     formatted += tab.repeat(indent) + '<' + element + '>\n';
-    if (element.match(/^<?\w[^>]*[^\/]$/) && !element.startsWith('input') && !element.startsWith('img') && !element.startsWith('br') && !element.startsWith('hr')) {
+    if (
+      element.match(/^<?\w[^>]*[^\/]$/) &&
+      !element.startsWith('input') &&
+      !element.startsWith('img') &&
+      !element.startsWith('br') &&
+      !element.startsWith('hr')
+    ) {
       indent++;
     }
   });
