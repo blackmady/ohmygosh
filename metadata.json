@@ -1,0 +1,8 @@
+{
+  "name": "CloudPaste - Code & Snippet Previewer",
+  "description": "An online developer tool designed for Cloudflare Pages to paste, highlight, preview frontend code (HTML, SVG, Markdown, CSV), upload folders, and generate permanent share links.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
