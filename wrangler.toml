@@ -2,15 +2,19 @@ name = "ohmygosh"
 compatibility_date = "2024-09-23"
 pages_build_output_dir = "dist"
 
-# Cloudflare D1 Database Binding for CloudPaste
-# Run: npx wrangler d1 create ohmygosh-db
-# Then paste your database_id below, or bind "DB" in Cloudflare Pages Dashboard -> Settings -> Functions -> D1 Database Bindings
-[[d1_databases]]
-binding = "DB"
-database_name = "ohmygosh-db"
-database_id = "binding-db"
-
-# Optional Cloudflare KV Binding (for key-value fast caching)
-[[kv_namespaces]]
-binding = "SNIPPETS_KV"
-id = "binding-kv"
+# 说明：
+# 如果您在 Cloudflare Pages 控制台后台直接绑定（推荐方式）：
+#   路径：Pages 项目 -> 设置 (Settings) -> Functions -> 绑定 (Bindings)
+#   - D1 数据库绑定变量名：DB
+#   - KV 命名空间绑定变量名：SNIPPETS_KV
+#
+# 如果您想通过 wrangler.toml 绑定，请在 Cloudflare 创建后填入真实的 32位十六进制 ID（勿填占位符）：
+#
+# [[d1_databases]]
+# binding = "DB"
+# database_name = "ohmygosh-db"
+# database_id = "您的真实D1-UUID"
+#
+# [[kv_namespaces]]
+# binding = "SNIPPETS_KV"
+# id = "您的真实KV-ID"

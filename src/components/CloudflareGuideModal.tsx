@@ -89,6 +89,52 @@ export const CloudflareGuideModal: React.FC<CloudflareGuideModalProps> = ({ onCl
             </div>
           </div>
 
+            {/* Cloudflare Pages Database & KV Bindings */}
+          <div className="p-4 bg-neutral-950 border border-neutral-800 rounded-xl space-y-3">
+            <div className="font-semibold text-white flex items-center gap-1.5 text-sm">
+              <Zap className="w-4 h-4 text-orange-400" />
+              <span>D1 数据库与 KV 变量名绑定指南（解决 Error 8000022）</span>
+            </div>
+            <p className="text-neutral-400 text-xs">
+              此前构建报错 <code className="text-red-400 bg-neutral-900 px-1 font-mono">Error 8000022: Invalid KV namespace ID</code> 是因为 <code className="text-neutral-300 font-mono">wrangler.toml</code> 中包含占位符 ID。我们已将占位符注释。
+            </p>
+
+            <div className="border border-neutral-800 rounded-lg overflow-hidden">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead className="bg-neutral-900 border-b border-neutral-800 text-neutral-400 font-semibold">
+                  <tr>
+                    <th className="py-2 px-3">资源类型</th>
+                    <th className="py-2 px-3">变量名（Variable Name）</th>
+                    <th className="py-2 px-3">是否必须</th>
+                    <th className="py-2 px-3">作用</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-neutral-800/60 font-mono text-[11px]">
+                  <tr>
+                    <td className="py-2 px-3 text-neutral-300 font-sans">D1 数据库（首选）</td>
+                    <td className="py-2 px-3 text-orange-400 font-bold">DB</td>
+                    <td className="py-2 px-3 text-neutral-400 font-sans">可选（推荐）</td>
+                    <td className="py-2 px-3 text-neutral-400 font-sans">保存代码工程，支持历史快照与按时间列表</td>
+                  </tr>
+                  <tr>
+                    <td className="py-2 px-3 text-neutral-300 font-sans">KV 命名空间</td>
+                    <td className="py-2 px-3 text-emerald-400 font-bold">SNIPPETS_KV</td>
+                    <td className="py-2 px-3 text-neutral-400 font-sans">可选（后备）</td>
+                    <td className="py-2 px-3 text-neutral-400 font-sans">高速键值存储，D1 未配置时的备用云存储</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div className="text-[11px] text-neutral-400 space-y-1 bg-neutral-900/60 p-2.5 rounded-lg border border-neutral-800/80">
+              <div className="text-neutral-200 font-semibold">如何在控制台添加绑定（只需两步）：</div>
+              <div>1. 进入 Cloudflare 控制台 -&gt; <strong>Workers &amp; Pages</strong> -&gt; 点击您的 <strong>ohmygosh</strong> 项目</div>
+              <div>2. 点击 <strong>设置 (Settings)</strong> -&gt; <strong>Functions</strong> -&gt; 找到 <strong>D1 database bindings</strong> 或 <strong>KV namespace bindings</strong></div>
+              <div>3. 点击 <strong>Add binding</strong>，变量名填 <code className="text-orange-400 font-mono font-bold">DB</code>（或 <code className="text-emerald-400 font-mono font-bold">SNIPPETS_KV</code>），选择您创建的实例即可。</div>
+              <div className="text-neutral-500 pt-1">（注：即使暂未绑定，系统也完全可用，会自动使用 LZ-String 客户端压缩生成永久分享短链，不会报错）</div>
+            </div>
+          </div>
+
           {/* Key Fix for Lockfile */}
           <div className="p-4 bg-neutral-950 border border-neutral-800 rounded-xl space-y-2">
             <div className="font-semibold text-white flex items-center gap-1.5">
