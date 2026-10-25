@@ -150,8 +150,10 @@ export const CloudDatabaseModal: React.FC<CloudDatabaseModalProps> = ({
               </span>
             ) : (
               <span className="flex items-center gap-1 text-amber-400 font-medium">
-                <AlertTriangle className="w-3.5 h-3.5" />
-                <span>未绑定 D1 数据库 (请在 Pages 设置中添加变量名 DB)</span>
+                <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                <span>
+                  未检测到 DB 绑定 (若刚在后台添加了绑定，请在 Pages「部署」中点击「重试部署」或 push 代码以生效)
+                </span>
               </span>
             )}
           </div>

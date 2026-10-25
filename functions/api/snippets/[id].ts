@@ -3,7 +3,20 @@
 
 export interface Env {
   DB?: any;
+  db?: any;
+  d1?: any;
+  DATABASE?: any;
   SNIPPETS_KV?: any;
+  snippets_kv?: any;
+  KV?: any;
+}
+
+function getD1(env: any) {
+  return env?.DB || env?.db || env?.d1 || env?.DATABASE || null;
+}
+
+function getKV(env: any) {
+  return env?.SNIPPETS_KV || env?.snippets_kv || env?.KV || null;
 }
 
 export type PagesFunction<T = any> = (context: {
@@ -44,11 +57,13 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
 
     // Clean up ID in case URL contained # or parameters
     const id = rawId.replace(/^[#?]/, '').split('&')[0];
+    const d1 = getD1(env);
+    const kv = getKV(env);
 
     // 1. Check Cloudflare D1 SQL Database
-    if (env.DB) {
+    if (d1) {
       try {
-        const row = await env.DB.prepare(
+        const row = await d1.prepare(
           `SELECT id, title, files, active_path, total_files, size_bytes, created_at FROM snippets WHERE id = ?`
         ).bind(id).first();
 
@@ -85,9 +100,9 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     }
 
     // 2. Check Cloudflare KV fallback
-    if (env.SNIPPETS_KV) {
+    if (kv) {
       try {
-        const kvValue = await env.SNIPPETS_KV.get(id);
+        const kvValue = await kv.get(id);
         if (kvValue) {
           const parsed = JSON.parse(kvValue);
           return new Response(

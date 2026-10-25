@@ -2,8 +2,21 @@
 // Direct integration with Cloudflare D1 SQL database and Cloudflare KV
 
 export interface Env {
-  DB?: any; // Cloudflare D1 Database binding
-  SNIPPETS_KV?: any; // Optional Cloudflare KV binding
+  DB?: any;
+  db?: any;
+  d1?: any;
+  DATABASE?: any;
+  SNIPPETS_KV?: any;
+  snippets_kv?: any;
+  KV?: any;
+}
+
+export function getD1(env: any) {
+  return env?.DB || env?.db || env?.d1 || env?.DATABASE || null;
+}
+
+export function getKV(env: any) {
+  return env?.SNIPPETS_KV || env?.snippets_kv || env?.KV || null;
 }
 
 export type PagesFunction<T = any> = (context: {
@@ -79,12 +92,15 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     const id = `cp_${now.toString(36).slice(-5)}_${Math.random().toString(36).substring(2, 6)}`;
     const filesJson = JSON.stringify(files);
 
-    // 1. Primary: Cloudflare D1 SQL Database
-    if (env.DB) {
-      try {
-        await ensureD1Table(env.DB);
+    const d1 = getD1(env);
+    const kv = getKV(env);
 
-        await env.DB.prepare(
+    // 1. Primary: Cloudflare D1 SQL Database
+    if (d1) {
+      try {
+        await ensureD1Table(d1);
+
+        await d1.prepare(
           `INSERT INTO snippets (id, title, files, active_path, total_files, size_bytes, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
         )
           .bind(id, title, filesJson, activePath, files.length, totalSize, now, now)
@@ -121,9 +137,9 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     }
 
     // 2. Secondary fallback: Cloudflare KV
-    if (env.SNIPPETS_KV) {
+    if (kv) {
       try {
-        await env.SNIPPETS_KV.put(
+        await kv.put(
           id,
           JSON.stringify({ id, title, files, activePath, totalFiles: files.length, totalSize, created_at: now }),
           { metadata: { title, created_at: now, total_files: files.length } }
@@ -192,15 +208,18 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     const url = new URL(request.url);
     const action = url.searchParams.get('action');
 
+    const d1 = getD1(env);
+    const kv = getKV(env);
+
     // Diagnostic status endpoint
     if (action === 'status') {
-      if (!env.DB) {
+      if (!d1) {
         return new Response(
           JSON.stringify({
             success: true,
             d1Bound: false,
-            kvBound: !!env.SNIPPETS_KV,
-            message: '未检测到 D1 绑定 (变量名必须为 "DB")',
+            kvBound: !!kv,
+            message: '未检测到 D1 绑定 (若刚在后台绑定了 DB，请在 Cloudflare Pages「部署」中点击「重试部署」以生效)',
             code: 'DB_NOT_BOUND',
           }),
           { status: 200, headers: CORS_HEADERS }
@@ -208,8 +227,8 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       }
 
       try {
-        await ensureD1Table(env.DB);
-        const countRes = await env.DB.prepare('SELECT count(*) as count FROM snippets').first();
+        await ensureD1Table(d1);
+        const countRes = await d1.prepare('SELECT count(*) as count FROM snippets').first();
         return new Response(
           JSON.stringify({
             success: true,
@@ -234,9 +253,9 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     }
 
     // Normal list
-    if (env.DB) {
-      await ensureD1Table(env.DB);
-      const results = await env.DB.prepare(
+    if (d1) {
+      await ensureD1Table(d1);
+      const results = await d1.prepare(
         `SELECT id, title, active_path, total_files, size_bytes, created_at FROM snippets ORDER BY created_at DESC LIMIT 50`
       ).all();
 
