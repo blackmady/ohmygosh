@@ -14,6 +14,8 @@ import {
   Sparkles,
   ArrowRight,
   Code2,
+  ChevronUp,
+  ChevronDown,
 } from 'lucide-react';
 
 interface CodeEditorProps {
@@ -34,11 +36,13 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
   const [showSearch, setShowSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [replaceQuery, setReplaceQuery] = useState('');
+  const [currentMatchIndex, setCurrentMatchIndex] = useState(0);
   const [cursorPos, setCursorPos] = useState({ line: 1, col: 1, selected: 0 });
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const lineNumbersRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   // Line height corresponding to font size
   const lineHeight = fontSize === 12 ? 20 : fontSize === 13 ? 22 : 24;
@@ -69,8 +73,6 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
   const highlightedCodeWithEndingNewline = useMemo(() => {
     if (!file.content) return '';
     if (file.content.endsWith('\n')) {
-      // Adding a space after newline ensures the browser's HTML parser
-      // renders the full blank line height at the bottom
       return highlightedCode + '\n ';
     }
     return highlightedCode;
@@ -93,6 +95,100 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
   const handleContainerScroll = () => {
     if (scrollContainerRef.current && lineNumbersRef.current) {
       lineNumbersRef.current.scrollTop = scrollContainerRef.current.scrollTop;
+    }
+  };
+
+  // Find all match start positions in file.content
+  const matches = useMemo(() => {
+    if (!searchQuery) return [];
+    const lowerContent = file.content.toLowerCase();
+    const lowerQuery = searchQuery.toLowerCase();
+    const result: number[] = [];
+    let start = 0;
+    while (start < lowerContent.length) {
+      const idx = lowerContent.indexOf(lowerQuery, start);
+      if (idx === -1) break;
+      result.push(idx);
+      start = idx + Math.max(1, lowerQuery.length);
+    }
+    return result;
+  }, [file.content, searchQuery]);
+
+  const [hasJumped, setHasJumped] = useState(false);
+
+  // Jump to specific match index
+  const jumpToMatch = useCallback(
+    (targetIdx: number, matchArray: number[] = matches, keepSearchFocus = true) => {
+      if (!matchArray || matchArray.length === 0) return;
+      const normalizedIdx = (targetIdx + matchArray.length) % matchArray.length;
+      setCurrentMatchIndex(normalizedIdx);
+
+      const startPos = matchArray[normalizedIdx];
+      const endPos = startPos + searchQuery.length;
+
+      const textarea = textareaRef.current;
+      if (textarea) {
+        textarea.setSelectionRange(startPos, endPos);
+
+        // Scroll to matching line
+        const before = file.content.substring(0, startPos);
+        const lineIdx = before.split('\n').length - 1;
+        if (scrollContainerRef.current) {
+          const targetScrollTop = Math.max(0, lineIdx * lineHeight - 100);
+          scrollContainerRef.current.scrollTop = targetScrollTop;
+        }
+        updateCursorPos();
+
+        if (keepSearchFocus && searchInputRef.current) {
+          searchInputRef.current.focus();
+        } else {
+          textarea.focus();
+        }
+      }
+    },
+    [matches, searchQuery, file.content, lineHeight, updateCursorPos]
+  );
+
+  // Reset match index and jump flag when searchQuery changes (NO focus stealing while typing!)
+  useEffect(() => {
+    setCurrentMatchIndex(0);
+    setHasJumped(false);
+  }, [searchQuery]);
+
+  const handleNextMatch = () => {
+    if (matches.length === 0) return;
+    if (!hasJumped) {
+      setHasJumped(true);
+      jumpToMatch(0, matches, true);
+    } else {
+      const nextIdx = (currentMatchIndex + 1) % matches.length;
+      jumpToMatch(nextIdx, matches, true);
+    }
+  };
+
+  const handlePrevMatch = () => {
+    if (matches.length === 0) return;
+    if (!hasJumped) {
+      setHasJumped(true);
+      jumpToMatch(matches.length - 1, matches, true);
+    } else {
+      const prevIdx = (currentMatchIndex - 1 + matches.length) % matches.length;
+      jumpToMatch(prevIdx, matches, true);
+    }
+  };
+
+  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (e.shiftKey) {
+        handlePrevMatch();
+      } else {
+        handleNextMatch();
+      }
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      setShowSearch(false);
+      textareaRef.current?.focus();
     }
   };
 
@@ -262,7 +358,13 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
     // 6. Ctrl+F / Cmd+F shortcut
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') {
       e.preventDefault();
-      setShowSearch((prev) => !prev);
+      setShowSearch((prev) => {
+        const next = !prev;
+        if (next) {
+          setTimeout(() => searchInputRef.current?.focus(), 50);
+        }
+        return next;
+      });
     }
   };
 
@@ -289,20 +391,10 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
 
   // Perform search / replace
   const handleReplaceAll = () => {
-    if (!searchQuery) return;
+    if (!searchQuery || matches.length === 0) return;
     const newContent = file.content.split(searchQuery).join(replaceQuery);
     onChangeContent(newContent);
   };
-
-  // Search match count
-  const searchMatchCount = useMemo(() => {
-    if (!searchQuery) return 0;
-    try {
-      return (file.content.match(new RegExp(searchQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')) || []).length;
-    } catch {
-      return 0;
-    }
-  }, [searchQuery, file.content]);
 
   // Keep cursor telemetry updated on file change
   useEffect(() => {
@@ -322,9 +414,9 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
   };
 
   return (
-    <div className="flex flex-col h-full bg-neutral-950 text-neutral-100 select-none">
+    <div className="flex flex-col h-full bg-neutral-950 text-neutral-100">
       {/* Editor Header Bar */}
-      <div className="flex items-center justify-between px-3 py-1.5 bg-neutral-900 border-b border-neutral-800 text-xs">
+      <div className="flex items-center justify-between px-3 py-1.5 bg-neutral-900 border-b border-neutral-800 text-xs select-none">
         <div className="flex items-center gap-2">
           {/* Active File Name & Language Selector */}
           <span className="font-mono text-neutral-300 font-medium text-xs truncate max-w-[150px]">
@@ -383,7 +475,15 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
 
           {/* Search Toggle */}
           <button
-            onClick={() => setShowSearch(!showSearch)}
+            onClick={() => {
+              setShowSearch((prev) => {
+                const next = !prev;
+                if (next) {
+                  setTimeout(() => searchInputRef.current?.focus(), 50);
+                }
+                return next;
+              });
+            }}
             title="查找 / 替换 (Ctrl+F)"
             className={`p-1.5 rounded transition-colors ${
               showSearch ? 'bg-orange-500/20 text-orange-400' : 'text-neutral-400 hover:text-white hover:bg-neutral-800'
@@ -425,46 +525,84 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
         </div>
       </div>
 
-      {/* Search / Replace Panel */}
+      {/* Search / Replace Panel with Enter Navigation */}
       {showSearch && (
-        <div className="flex flex-wrap items-center gap-2 p-2 bg-neutral-900 border-b border-neutral-800 text-xs animate-fade-in">
-          <div className="relative">
+        <div className="flex flex-wrap items-center gap-2 p-2 bg-neutral-900 border-b border-neutral-800 text-xs animate-fade-in select-none">
+          <div className="relative flex items-center">
             <input
+              ref={searchInputRef}
               type="text"
-              placeholder="查找文本..."
+              placeholder="查找文本 (Enter 下一个)..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="px-2 py-1 pr-12 bg-neutral-950 border border-neutral-700 rounded text-xs text-neutral-200 placeholder-neutral-500 focus:outline-none focus:border-orange-500 w-36"
+              onKeyDown={handleSearchKeyDown}
+              className="px-2 py-1 pr-16 bg-neutral-950 border border-neutral-700 rounded text-xs text-neutral-200 placeholder-neutral-500 focus:outline-none focus:border-orange-500 w-48 font-mono"
               autoFocus
             />
-            {searchQuery && (
-              <span className="absolute right-1.5 top-1.5 text-[10px] text-neutral-400 font-mono">
-                {searchMatchCount} 处
+            {searchQuery ? (
+              <span className="absolute right-2 text-[10px] text-orange-400/90 font-mono select-none">
+                {matches.length === 0
+                  ? '未找到'
+                  : hasJumped
+                  ? `${currentMatchIndex + 1}/${matches.length}`
+                  : `共 ${matches.length} 处`}
               </span>
-            )}
+            ) : null}
+          </div>
+
+          <div className="flex items-center bg-neutral-950 border border-neutral-800 rounded p-0.5">
+            <button
+              type="button"
+              onClick={handlePrevMatch}
+              disabled={matches.length === 0}
+              title="上一个匹配 (Shift+Enter)"
+              className="p-1 text-neutral-400 hover:text-white disabled:opacity-30 rounded transition-colors"
+            >
+              <ChevronUp className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={handleNextMatch}
+              disabled={matches.length === 0}
+              title="下一个匹配 (Enter)"
+              className="p-1 text-neutral-400 hover:text-white disabled:opacity-30 rounded transition-colors"
+            >
+              <ChevronDown className="w-3.5 h-3.5" />
+            </button>
           </div>
 
           <div className="flex items-center gap-1">
-            <ArrowRight className="w-3 h-3 text-neutral-500" />
+            <ArrowRight className="w-3 h-3 text-neutral-500 shrink-0" />
             <input
               type="text"
               placeholder="替换为..."
               value={replaceQuery}
               onChange={(e) => setReplaceQuery(e.target.value)}
-              className="px-2 py-1 bg-neutral-950 border border-neutral-700 rounded text-xs text-neutral-200 placeholder-neutral-500 focus:outline-none focus:border-orange-500 w-36"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  handleReplaceAll();
+                }
+              }}
+              className="px-2 py-1 bg-neutral-950 border border-neutral-700 rounded text-xs text-neutral-200 placeholder-neutral-500 focus:outline-none focus:border-orange-500 w-32 font-mono"
             />
           </div>
 
           <button
+            type="button"
             onClick={handleReplaceAll}
-            disabled={!searchQuery || searchMatchCount === 0}
-            className="px-2.5 py-1 bg-orange-600 hover:bg-orange-500 disabled:opacity-40 text-white rounded text-xs transition-colors font-medium"
+            disabled={!searchQuery || matches.length === 0}
+            className="px-2.5 py-1 bg-orange-600 hover:bg-orange-500 disabled:opacity-40 text-white rounded text-xs transition-colors font-medium cursor-pointer"
           >
             全部替换
           </button>
 
           <button
-            onClick={() => setShowSearch(false)}
+            type="button"
+            onClick={() => {
+              setShowSearch(false);
+              textareaRef.current?.focus();
+            }}
             className="p-1 text-neutral-400 hover:text-white ml-auto"
           >
             <X className="w-3.5 h-3.5" />

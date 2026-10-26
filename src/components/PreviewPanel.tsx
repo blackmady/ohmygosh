@@ -153,7 +153,7 @@ export const PreviewPanel: React.FC<PreviewPanelProps> = ({
       </div>
 
       {/* Main Preview Container with device wrapper */}
-      <div className="flex-1 overflow-auto bg-neutral-900/60 flex items-center justify-center">
+      <div className="flex-1 overflow-auto bg-neutral-900/60 flex items-center justify-center select-text">
         <div className={`${getDeviceWidth(false)} h-full flex flex-col transition-all duration-200`}>
           {renderContent(false)}
         </div>

@@ -255,7 +255,7 @@ export const CsvPreview: React.FC<CsvPreviewProps> = ({
       )}
 
       {/* Main Table Content */}
-      <div className="flex-1 overflow-auto bg-neutral-950 w-full h-full">
+      <div className="flex-1 overflow-auto bg-neutral-950 w-full h-full select-text">
         {viewFormat === 'raw' ? (
           <pre className="p-4 font-mono text-xs text-neutral-300 whitespace-pre overflow-auto">
             {currentFile.content}

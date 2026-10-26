@@ -418,7 +418,7 @@ export const MarkdownPreview: React.FC<MarkdownPreviewProps> = ({
         {/* Beautiful Markdown Body Container */}
         <div
           ref={contentContainerRef}
-          className="flex-1 overflow-y-auto px-6 py-8 md:px-12 md:py-10 w-full h-full"
+          className="flex-1 overflow-y-auto px-6 py-8 md:px-12 md:py-10 w-full h-full select-text"
         >
           <div
             className={`max-w-3xl mx-auto markdown-rendered-content ${
